@@ -193,7 +193,7 @@
 				",": function (state) { out(String.fromCharCode(pop(state))); },
 				"#": function (state) { state.col += state.cold; state.row += state.rowd; },
 				"g": function (state) { let row = pop(state); var col = pop(state); if (check(state, row, col)) { state.stack.push(field[row][col].charCodeAt(0)); } },
-				"p": function (state) { let row = pop(state); var col = pop(state); if (check(state, row, col)) { var val = String.fromCharCode(pop(state)); field[row][col] = val; document.getElementById("table").children[row].children[col].innerText = val; } },
+				"p": function (state) { let row = pop(state); var col = pop(state); if (check(state, row, col)) { var val = String.fromCharCode(pop(state)); field[row][col] = val; document.getElementById("table").children[row].children[col].innerText = val; document.getElementById("table").children[row].children[col].title = "" + val.charCodeAt(0); } },
 				"t": function (state) { state_copy = JSON.parse(JSON.stringify(state)); state_copy.paused_event = state.paused_event; state_copy.cold *= -1; state_copy.rowd *= -1; thread(state_copy); },
 				// "&" input number TODO
 				// "~" input characte TODO
@@ -330,6 +330,7 @@
 						else
 							val = line[j]
 						row.children[j].innerText = val == ' ' ? "\u00a0" : val;
+						row.children[j].title = "" + val.charCodeAt(0);
 						field[i][j] = val;
 					}
 				}
