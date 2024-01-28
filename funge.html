@@ -7,6 +7,8 @@
 				document.getElementById("stop").addEventListener("click", stop);
 				document.getElementById("copydown").addEventListener("click", copydown);
 				document.getElementById("copyup").addEventListener("click", copyup);
+				document.getElementById("toggle_pause").addEventListener("click", toggle_pause);
+				document.getElementById("step").addEventListener("click", step);
 				document.getElementById("history").addEventListener("change", load_history);
 				window.addEventListener('keydown', keydown, false);
 				saved_history = JSON.parse(window.localStorage.getItem("history") || "[]");
@@ -17,10 +19,44 @@
 				copydown();
 				out_area = document.getElementById("out");
 				go();
+				let p = new Promise(r => setTimeout(r, 10000));
+				async function f(i) {
+					await p;
+					console.log("test" + i + Date.now() / 1000);
+				}
+				f(1);
+				f(2);
 			}
-			var editing = {"state": false};
+			let paused_wake = null;
+			function toggle_pause(e) {
+				if (paused_wake === null) {
+					pause();
+				} else {
+					unpause();
+				}
+			}
+			let pause_count = 0;
+			function pause() {
+				let paused_event = new Promise(function (r) { paused_wake = r; null; });
+				paused_event.id = pause_count++;
+				threads.forEach(t => t.paused_event = paused_event);
+				document.getElementById("toggle_pause").innerText = "Wake all!";
+			}
+			function unpause() {
+				paused_wake("unpause");
+				paused_wake = null;
+				document.getElementById("toggle_pause").innerText = "Pause all!";
+			}
+			function step(e) {
+				let old_wake = paused_wake;
+				pause();
+				if (old_wake !== null) {
+					old_wake("step");
+				}
+			}
+			let editing = {"state": false};
 			function keydown(e) {
-				var key = e.key;
+				let key = e.key;
 				if (key == "Backspace" || key == "Delete") {
 					key = " ";
 				}
@@ -49,11 +85,12 @@
 			}
 			function go() {
 				stop();
-				thread({"col": 0, "row": 0, "cold": 1, "rowd": 0, running: true, mode: "normal", stack: []});
+				out_area.innerText = "";
+				thread({"col": -1, "row": 0, "cold": 1, "rowd": 0, running: true, mode: "normal", stack: [], paused_event: null});
 			}
-			var saved_history;
+			let saved_history;
 			function append_save() {
-				var current = {
+				let current = {
 					ts: new Date().toLocaleString(),
 					data: document.getElementById("area").value,
 					height: field.length,
@@ -69,8 +106,8 @@
 				update_history();
 			}
 			function load_history() {
-				var history_elt = document.getElementById("history");
-				var history_data = saved_history[parseInt(history_elt.options[history_elt.selectedIndex].value)];
+				let history_elt = document.getElementById("history");
+				let history_data = saved_history[parseInt(history_elt.options[history_elt.selectedIndex].value)];
 				document.getElementById("area").value = history_data.data;
 				document.getElementById("area").cols = history_data.width;
 				document.getElementById("area").rows = history_data.height;
@@ -78,11 +115,11 @@
 				document.getElementById("height").value = history_data.height;
 			}
 			function update_history() {
-				var history_elt = document.getElementById("history");
+				let history_elt = document.getElementById("history");
 				while(history_elt.children.length > 0)
 					history_elt.removeChild(history_elt.children[0]);
-				for(var i=0; i<saved_history.length; i++) {
-					var e = document.createElement("option");
+				for(let i=0; i<saved_history.length; i++) {
+					let e = document.createElement("option");
 					e.value = i;
 					e.innerText = saved_history[i].ts;
 					history_elt.appendChild(e);
@@ -93,7 +130,7 @@
 					threads.pop().running = false;
 				}
 			}
-			var out_area;
+			let out_area;
 			function pop(state) {
 				if (state.stack.length > 0) {
 					return state.stack.pop();
@@ -102,7 +139,7 @@
 					return 0;
 				}
 			}
-			var instructions = {
+			let instructions = {
 				"+": function (state) { state.stack.push(pop(state) + pop(state)); },
 				"-": function (state) { state.stack.push(-pop(state) + pop(state)); },
 				"*": function (state) { state.stack.push(pop(state) * pop(state)); },
@@ -119,19 +156,20 @@
 				"|": function (state) { state.cold =  0; state.rowd = pop(state) == 0 ? 1 : -1; },
 				'"': function (state) { state.mode = "string"; },
 				":": function (state) { state.stack.push(state.stack[state.stack.length-1]); },
-				"\\": function (state) { var a = pop(state); var b = pop(state); state.stack.push(a, b); },
+				"\\": function (state) { let a = pop(state); var b = pop(state); state.stack.push(a, b); },
 				"$": function (state) { pop(state); },
 				".": function (state) { out(pop(state) + " "); },
 				",": function (state) { out(String.fromCharCode(pop(state))); },
-				" ": function (state) { state.col += state.cold; state.row += state.rowd; },
-				"p": function (state) { var row = pop(state); var col = pop(state); var val = String.fromCharCode(pop(state)); field[row][col] = val; document.getElementById("table").children[row].children[col].innerText = val; },
+				"#": function (state) { state.col += state.cold; state.row += state.rowd; },
 				"g": function (state) { state.stack.push(field[pop(state)][pop(state)] || " "); },
+				"p": function (state) { let row = pop(state); var col = pop(state); var val = String.fromCharCode(pop(state)); field[row][col] = val; document.getElementById("table").children[row].children[col].innerText = val; },
+				"t": function (state) { state_copy = JSON.parse(JSON.stringify(state)); state_copy.paused_event = state.paused_event; state_copy.cold *= -1; state_copy.rowd *= -1; thread(state_copy); },
 				// "&" input number TODO
 				// "~" input characte TODO
 				"@": function (state) { oute("Normal termination!"); state.running = false; },
 				" ": function (state) { },
 			};
-			for(var i=0; i<10; i++) {
+			for(let i=0; i<10; i++) {
 				const j = i; // Prevent any capture shenanigans.
 				instructions["" + i] = function (state) { state.stack.push(j); };
 			}
@@ -139,7 +177,7 @@
 				out_area.appendChild(document.createTextNode(s));
 			}
 			function oute(s) {
-				var span = document.createElement("p");
+				let span = document.createElement("p");
 				span.className = "error";
 				span.innerText = s;
 				out_area.appendChild(span);
@@ -152,24 +190,59 @@
 				oute("ERROR: " + message);
 				oute("State was: " + JSON.stringify(state));
 			}
-			var field = [];
-			var threads = [];
+			let field = [];
+			let threads = [];
 			async function sleep(ms) {
 				await new Promise(r => setTimeout(r, ms));
 			}
 			async function thread(state) {
 				threads.push(state);
-				var count = 0;
-				var slice_loops = document.getElementById("slice_loops").value;
-				var slice_sleep = document.getElementById("slice_sleep").value;
-				var max_loops = document.getElementById("max_loops").value;
-				var highlighted = document.getElementById("table").children[state.row].children[state.col];
+				state.count = 0;
+				state.slice_loops = document.getElementById("slice_loops").value;
+				state.slice_sleep = document.getElementById("slice_sleep").value;
+				state.max_loops = document.getElementById("max_loops").value;
+				let highlighted = document.getElementById("table").children[state.row + state.rowd].children[state.col + state.cold];
 				highlighted.classList.add("active");
 				while(state.running) {
-					var symbol = field[state.row][state.col];
+					state.col += state.cold;
+					state.row += state.rowd;
+					if (state.count > state.max_loops) {
+						error(state, "Exceeded max instructions!");
+						state.running = false;
+						break;
+					}
+					let slept = false;
+					if (state.paused_event !== null) {
+						highlighted.classList.remove("active");
+						highlighted = document.getElementById("table").children[state.row].children[state.col];
+						highlighted.classList.add("active");
+						let paused_event = state.paused_event;
+						console.log("Awaiting unpause " + paused_event.id + " " + JSON.stringify(state));
+						let result = await paused_event;
+						if (state.paused_event === paused_event)
+							state.paused_event = null;
+						console.log("Unpaused " + paused_event.id + " " + JSON.stringify(result) + " " + JSON.stringify(state));
+						slept = true;
+					}
+					if (!slept && state.count % state.slice_loops == 0) {
+						highlighted.classList.remove("active");
+						highlighted = document.getElementById("table").children[state.row].children[state.col];
+						highlighted.classList.add("active");
+						// Give the browser back some time.
+						await sleep(state.slice_sleep);
+					}
+					let symbol = field[state.row][state.col];
 					if (state.mode == "normal") {
-						var instruction = instructions[symbol];
-						instruction(state);
+						let instruction = instructions[symbol];
+						if (instruction == null) {
+							error(state, "Invalid instruction: " + symbol);
+						} else {
+							try {
+								instruction(state);
+							} catch (err) {
+								error(state, "Exception caught: " + err.message);
+							}
+						}
 					} else if (state.mode == "string") {
 						if (symbol == '"') {
 							state.mode = "normal";
@@ -177,28 +250,17 @@
 							state.stack.push(symbol.charCodeAt(0));
 						}
 					}
-					state.col += state.cold;
-					state.row += state.rowd;
-					count += 1;
-					if (count % slice_loops == 0) {
-						highlighted.classList.remove("active");
-						highlighted = document.getElementById("table").children[state.row].children[state.col];
-						highlighted.classList.add("active");
-						// Give the browser back some time.
-						await sleep(slice_sleep);
-						if (count > max_loops) {
-							error(state, "Exceeded max instructions!");
-							state.running = false;
-						}
-					}
+					state.count += 1;
 				}
+				idx = threads.findIndex(x => x === state);
+				threads.splice(idx, 1);
 				highlighted.classList.remove("active");
 			}
 			function copydown() {
-				var lines = document.getElementById("area").value.split("\n");
-				var table = document.getElementById("table");
-				var height = document.getElementById("height").value;
-				var width = document.getElementById("width").value;
+				let lines = document.getElementById("area").value.split("\n");
+				let table = document.getElementById("table");
+				let height = document.getElementById("height").value;
+				let width = document.getElementById("width").value;
 				while(table.children.length > height) {
 					table.removeChild(table.children[table.children.length-1]);
 					field.pop();
@@ -207,15 +269,13 @@
 					table.appendChild(document.createElement("tr"));
 					field.push([]);
 				}
-				for(var i=0; i<height; i++) {
-					if (i >= table.children.length) {
-					}
-					var line;
+				for(let i=0; i<height; i++) {
+					let line;
 					if (i >= lines.length)
 						line = "";
 					else 
 						line = lines[i];
-					var row = table.children[i];
+					let row = table.children[i];
 					while(row.children.length > width) {
 						row.removeChild(row.children[row.children.length-1]);
 						field[i].pop();
@@ -228,8 +288,8 @@
 						row.appendChild(td);
 						field[i].push(" ");
 					}
-					for(var j=0; j<width; j++) {
-						var val;
+					for(let j=0; j<width; j++) {
+						let val;
 						if (j >= line.length)
 							val = " ";
 						else
@@ -241,16 +301,16 @@
 				append_save();
 			}
 			function copyup() {
-				var table = document.getElementById("table");
-				var lines = [];
-				var linesbuf = [];
+				let table = document.getElementById("table");
+				let lines = [];
+				let linesbuf = [];
 				document.getElementById("height").value = field.length;
 				document.getElementById("width").value = field[0].length;
-				for(var i=0; i<field.length; i++) {
-					var line = "";
-					var linebuf = "";
-					var row = field[i];
-					for(var j=0; j<row.length; j++) {
+				for(let i=0; i<field.length; i++) {
+					let line = "";
+					let linebuf = "";
+					let row = field[i];
+					for(let j=0; j<row.length; j++) {
 						linebuf += field[i][j];
 						if (field[i][j] != " ") {
 							line += linebuf;
@@ -297,7 +357,7 @@ td { background: lightgrey; width: 1em; padding: 0px; text-align: center; }
 		<hr/>
 		<button id="go">Go!</button>
 		(Sleep <input type="number" id="slice_sleep" value="1"/> ms every <input type="number" id="slice_loops" value="100"/> instructions, exit after <input type="number" id="max_loops" value="10000"/> instructions)
-		<button id="stop">Stop!</button>
+		<button id="stop">Terminate!</button> <button id="toggle_pause">Pause all!</button> <button id="step">Step all!</button>
 		<table id="table">
 		</table>
 		<hr/>
