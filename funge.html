@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<script language="javascript">
+			function load() {
+				document.getElementById("go").addEventListener("click", go);
+				document.getElementById("stop").addEventListener("click", stop);
+				document.getElementById("copydown").addEventListener("click", copydown);
+				document.getElementById("copyup").addEventListener("click", copyup);
+				document.getElementById("history").addEventListener("change", load_history);
+				window.addEventListener('keydown', keydown, false);
+				saved_history = JSON.parse(window.localStorage.getItem("history") || "[]");
+				update_history();
+				if (saved_history.length > 0) {
+					load_history();
+				}
+				copydown();
+				out_area = document.getElementById("out");
+				go();
+			}
+			var editing = {"state": false};
+			function keydown(e) {
+				var key = e.key;
+				if (key == "Backspace" || key == "Delete") {
+					key = " ";
+				}
+				if (key.length != 1) {
+					console.log("Key " + key + " has weird length; keyCode is " + e.keyCode);
+					return;
+				}
+				if (editing.state) {
+					field[editing.row][editing.col] = key;
+					editing.element.innerText = key;
+					editing.element.classList.remove("editing");
+					editing = {"state": false};
+					e.preventDefault();
+				}
+			}
+			function begin_edit(col, row, td) {
+				if (editing.state) {
+					editing.element.classList.remove("editing");
+				} else {
+					editing.state = true;
+				}
+				editing.element = td;
+				editing.element.classList.add("editing");
+				editing.col = col;
+				editing.row = row;
+			}
+			function go() {
+				stop();
+				thread({"col": 0, "row": 0, "cold": 1, "rowd": 0, running: true, mode: "normal", stack: []});
+			}
+			var saved_history;
+			function append_save() {
+				var current = {
+					ts: new Date().toLocaleString(),
+					data: document.getElementById("area").value,
+					height: field.length,
+					width: field[0].length,
+				};
+				if (saved_history.length == 0 || current.data != saved_history[0].data) {
+					saved_history.unshift(current);
+				}
+				while(saved_history.length > 200) {
+					saved_history.pop();
+				}
+				window.localStorage.setItem("history", JSON.stringify(saved_history));
+				update_history();
+			}
+			function load_history() {
+				var history_elt = document.getElementById("history");
+				var history_data = saved_history[parseInt(history_elt.options[history_elt.selectedIndex].value)];
+				document.getElementById("area").value = history_data.data;
+				document.getElementById("area").cols = history_data.width;
+				document.getElementById("area").rows = history_data.height;
+				document.getElementById("width").value = history_data.width;
+				document.getElementById("height").value = history_data.height;
+			}
+			function update_history() {
+				var history_elt = document.getElementById("history");
+				while(history_elt.children.length > 0)
+					history_elt.removeChild(history_elt.children[0]);
+				for(var i=0; i<saved_history.length; i++) {
+					var e = document.createElement("option");
+					e.value = i;
+					e.innerText = saved_history[i].ts;
+					history_elt.appendChild(e);
+				}
+			}
+			function stop() {
+				while(threads.length>0) {
+					threads.pop().running = false;
+				}
+			}
+			var out_area;
+			function pop(state) {
+				if (state.stack.length > 0) {
+					return state.stack.pop();
+				} else {
+					error(state, "Stack underflow");
+					return 0;
+				}
+			}
+			var instructions = {
+				"+": function (state) { state.stack.push(pop(state) + pop(state)); },
+				"-": function (state) { state.stack.push(-pop(state) + pop(state)); },
+				"*": function (state) { state.stack.push(pop(state) * pop(state)); },
+				"/": function (state) { state.stack.push(Math.floor(pop(state) / pop(state))); },
+				"%": function (state) { state.stack.push(pop(state) % pop(state)); },
+				"!": function (state) { state.stack.push(pop(state) == 0 ? 1 : 0); },
+				"`": function (state) { state.stack.push(pop(state) < pop(state) ? 1 : 0); },
+				"<": function (state) { state.cold = -1; state.rowd =  0; },
+				">": function (state) { state.cold =  1; state.rowd =  0; },
+				"^": function (state) { state.cold =  0; state.rowd = -1; },
+				"v": function (state) { state.cold =  0; state.rowd =  1; },
+				// "?" random direction, TODO.
+				"_": function (state) { state.rowd =  0; state.cold = pop(state) == 0 ? 1 : -1; },
+				"|": function (state) { state.cold =  0; state.rowd = pop(state) == 0 ? 1 : -1; },
+				'"': function (state) { state.mode = "string"; },
+				":": function (state) { state.stack.push(state.stack[state.stack.length-1]); },
+				"\\": function (state) { var a = pop(state); var b = pop(state); state.stack.push(a, b); },
+				"$": function (state) { pop(state); },
+				".": function (state) { out(pop(state) + " "); },
+				",": function (state) { out(String.fromCharCode(pop(state))); },
+				" ": function (state) { state.col += state.cold; state.row += state.rowd; },
+				"p": function (state) { var row = pop(state); var col = pop(state); var val = String.fromCharCode(pop(state)); field[row][col] = val; document.getElementById("table").children[row].children[col].innerText = val; },
+				"g": function (state) { state.stack.push(field[pop(state)][pop(state)] || " "); },
+				// "&" input number TODO
+				// "~" input characte TODO
+				"@": function (state) { oute("Normal termination!"); state.running = false; },
+				" ": function (state) { },
+			};
+			for(var i=0; i<10; i++) {
+				const j = i; // Prevent any capture shenanigans.
+				instructions["" + i] = function (state) { state.stack.push(j); };
+			}
+			function out(s) {
+				out_area.appendChild(document.createTextNode(s));
+			}
+			function oute(s) {
+				var span = document.createElement("p");
+				span.className = "error";
+				span.innerText = s;
+				out_area.appendChild(span);
+			}
+			function outnl() {
+				out_area.appendChild(document.createElement("br"));
+			}
+			function error(state, message) {
+				state.running = false;
+				oute("ERROR: " + message);
+				oute("State was: " + JSON.stringify(state));
+			}
+			var field = [];
+			var threads = [];
+			async function sleep(ms) {
+				await new Promise(r => setTimeout(r, ms));
+			}
+			async function thread(state) {
+				threads.push(state);
+				var count = 0;
+				var slice_loops = document.getElementById("slice_loops").value;
+				var slice_sleep = document.getElementById("slice_sleep").value;
+				var max_loops = document.getElementById("max_loops").value;
+				var highlighted = document.getElementById("table").children[state.row].children[state.col];
+				highlighted.classList.add("active");
+				while(state.running) {
+					var symbol = field[state.row][state.col];
+					if (state.mode == "normal") {
+						var instruction = instructions[symbol];
+						instruction(state);
+					} else if (state.mode == "string") {
+						if (symbol == '"') {
+							state.mode = "normal";
+						} else {
+							state.stack.push(symbol.charCodeAt(0));
+						}
+					}
+					state.col += state.cold;
+					state.row += state.rowd;
+					count += 1;
+					if (count % slice_loops == 0) {
+						highlighted.classList.remove("active");
+						highlighted = document.getElementById("table").children[state.row].children[state.col];
+						highlighted.classList.add("active");
+						// Give the browser back some time.
+						await sleep(slice_sleep);
+						if (count > max_loops) {
+							error(state, "Exceeded max instructions!");
+							state.running = false;
+						}
+					}
+				}
+				highlighted.classList.remove("active");
+			}
+			function copydown() {
+				var lines = document.getElementById("area").value.split("\n");
+				var table = document.getElementById("table");
+				var height = document.getElementById("height").value;
+				var width = document.getElementById("width").value;
+				while(table.children.length > height) {
+					table.removeChild(table.children[table.children.length-1]);
+					field.pop();
+				}
+				while(table.children.length < height) {
+					table.appendChild(document.createElement("tr"));
+					field.push([]);
+				}
+				for(var i=0; i<height; i++) {
+					if (i >= table.children.length) {
+					}
+					var line;
+					if (i >= lines.length)
+						line = "";
+					else 
+						line = lines[i];
+					var row = table.children[i];
+					while(row.children.length > width) {
+						row.removeChild(row.children[row.children.length-1]);
+						field[i].pop();
+					}
+					while(row.children.length < width) {
+						const td = document.createElement("td");
+						const rown = i;
+						const coln = row.children.length;
+						td.addEventListener("click", function() { begin_edit(coln, rown, td); });
+						row.appendChild(td);
+						field[i].push(" ");
+					}
+					for(var j=0; j<width; j++) {
+						var val;
+						if (j >= line.length)
+							val = " ";
+						else
+							val = line[j]
+						row.children[j].innerText = val == ' ' ? "\u00a0" : val;
+						field[i][j] = val;
+					}
+				}
+				append_save();
+			}
+			function copyup() {
+				var table = document.getElementById("table");
+				var lines = [];
+				var linesbuf = [];
+				document.getElementById("height").value = field.length;
+				document.getElementById("width").value = field[0].length;
+				for(var i=0; i<field.length; i++) {
+					var line = "";
+					var linebuf = "";
+					var row = field[i];
+					for(var j=0; j<row.length; j++) {
+						linebuf += field[i][j];
+						if (field[i][j] != " ") {
+							line += linebuf;
+							linebuf = "";
+						}
+					}
+					if (line == "") {
+						linesbuf.push(line);
+					} else {
+						while (linesbuf.length > 0) {
+							lines.push(linesbuf.shift());
+						}
+						lines.push(line);
+					}
+				}
+				document.getElementById("area").value = lines.join("\n");
+				append_save();
+			}
+		</script>
+<style>
+table { border: black solid 1px; padding: 0px; }
+td { background: lightgrey; width: 1em; padding: 0px; text-align: center; }
+#out { font-family: monospace; border: black solid 1px; }
+.error { background-color: red; margin: 0px; }
+.active { background-color: lightpink; }
+.editing { background-color: lightgreen; }
+</style>
+	</head>
+	<body onload="load();">
+		Edit code:<br/>
+		<textarea id="area" rows="25" cols="80">&gt;"olleh ",,,,,,v
+^.g99p99"!"< v &lt;
+           |1&lt;
+           @
+</textarea>
+		<br/>
+		W=<input type="number" id="width" value="80"/>
+		H=<input type="number" id="height" value="25"/>
+		<br/>
+		Load: <select id="history"></select>
+		<br/>
+		<button id="copydown">Copy To Memory (Down v)</button>
+		<button id="copyup">Copy From Memory (Up ^)</button>
+		<hr/>
+		<button id="go">Go!</button>
+		(Sleep <input type="number" id="slice_sleep" value="1"/> ms every <input type="number" id="slice_loops" value="100"/> instructions, exit after <input type="number" id="max_loops" value="10000"/> instructions)
+		<button id="stop">Stop!</button>
+		<table id="table">
+		</table>
+		<hr/>
+		<div id="out"></div>
+	</body>
+</html>
