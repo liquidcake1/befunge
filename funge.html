@@ -374,13 +374,42 @@ td { background: lightgrey; width: 1em; padding: 0px; text-align: center; }
 .active { background-color: lightpink; }
 .editing { background-color: lightgreen; }
 </style>
+				<title>Befunge</title>
 	</head>
 	<body onload="load();">
+		<h1>Befunge-ish interpreter</h1>
+		<p>© 2024. This work is openly licensed via <i><a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0</a></i></p>
+		<p>You can click the grid to edit cells. Press escape to release input
+		grab. Saves (to browser local storage) are made each time you copy
+		up/down. Max 200. Probably copy/paste elsewhere if it's important.</p>
+		<p>Bugs are pretty rife. It's a WIP.</p>
+		<h2>
 		Edit code:<br/>
-		<textarea id="area" rows="25" cols="80">&gt;"olleh ",,,,,,v
-^.g99p99"!"< v &lt;
-           |1&lt;
-           @
+		<textarea id="area" rows="25" cols="80">#vt                                    v  Originally made for virtualharby's LOVE game jam
+                                       #  https://itch.io/jam/virtualharby
+  Challenge:         +---------------------------------------------------------+
+* Edit only          |                                                         |
+  whitespace.        |                                                         |
+* Edit only within   |          ####       ####                                |
+  square.            |         #    #     #    #                               |
+* Output exactly:    |        #      #####      #                              |
+  You win            |       #        ###        #                             |
+  Normal termination!|       &gt;#v&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;v                             |
+  Normal termination!|       ^ &gt;0"niw uoY":!v!:&lt; v                             |
+#####################|       ^ @    p+990"@"_,#^ v                             |
+                     |       ^&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;                             |
+ &gt;994++21p331p041pv  |        #                 #                              |
+v             p151&lt;  |         #               #                               |
+&gt;21g:31gg\"#"\31gp::v|          #             #                                |
+pv-" "_v#-"\"_v#-"/"&lt;|           #           #                                 |
+ &gt;#v_v  v-10$$&lt;      |            #         #                                  |
+ v  &lt;  &gt; $1&gt;:41g*\51v|             #       #                                   |
+        &gt;  ^v15p14*g&lt;|              #     #                                    |
+   &gt;  041g-4 1p051g-v|               #   #                                     |
+ v" "&lt;     p&lt;     15&lt;|                # #                                      |
+ &gt;21g:31g:51g+31p\41v|                 #                                       |
+^              p12+g&lt;|                                                         |
+                     +---------------------------------------------------------+
 </textarea>
 		<br/>
 		W=<input type="number" id="width" value="80"/>
@@ -391,7 +420,7 @@ td { background: lightgrey; width: 1em; padding: 0px; text-align: center; }
 		<button id="copydown">Copy To Memory (Down v)</button>
 		<button id="copyup">Copy From Memory (Up ^)</button>
 		<hr/>
-		Sleep <input type="number" id="slice_sleep" value="1"/> ms every <input type="number" id="slice_loops" value="100"/> instructions, exit after <input type="number" id="max_loops" value="10000"/> instructions
+		Sleep <input type="number" id="slice_sleep" value="10"/> ms every <input type="number" id="slice_loops" value="1"/> instructions, exit after <input type="number" id="max_loops" value="1000000"/> instructions
 		<br/>
 		<button id="go">Go!</button>
 		<button id="stop">Terminate!</button>
