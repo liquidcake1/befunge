@@ -60,15 +60,40 @@
 				if (key == "Backspace" || key == "Delete") {
 					key = " ";
 				}
-				if (key.length != 1) {
+				if (key == "Escape") {
+					editing.state = false;
+					editing.element.classList.remove("editing");
+					return;
+				}
+				if (key.length != 1 && !key.startsWith("Arrow")) {
 					console.log("Key " + key + " has weird length; keyCode is " + e.keyCode);
 					return;
 				}
 				if (editing.state) {
-					field[editing.row][editing.col] = key;
-					editing.element.innerText = key;
 					editing.element.classList.remove("editing");
-					editing = {"state": false};
+					if (key.length == 1) {
+						field[editing.row][editing.col] = key;
+						editing.element.innerText = key;
+						editing.col += 1;
+					} else if (key == "ArrowUp") {
+						editing.row -= 1;
+					} else if (key == "ArrowDown") {
+						editing.row += 1;
+					} else if (key == "ArrowRight") {
+						editing.col += 1;
+					} else if (key == "ArrowLeft") {
+						editing.col -= 1;
+					}
+					if (editing.col < 0) editing.col = 0;
+					else if (editing.col >= width) editing.col = width - 1;
+					if (editing.row < 0) editing.row = 0;
+					else if (editing.row >= height) editing.row = height - 1;
+					editing.element = document.getElementById("table").children[editing.row].children[editing.col];
+					if (editing.element !== null) {
+						editing.element.classList.add("editing");
+					} else {
+						editing = {"state": false};
+					}
 					e.preventDefault();
 				}
 			}
@@ -139,6 +164,12 @@
 					return 0;
 				}
 			}
+			function check(state, row, col) {
+				console.log("" + row + " " + col);
+				if (row < 0 || row >= height) error(state, "Row " + row + " is out of bounds");
+				else if (col < 0 || col >= height) error(state, "Col " + col + " is out of bounds");
+				else return true;
+			}
 			let instructions = {
 				"+": function (state) { state.stack.push(pop(state) + pop(state)); },
 				"-": function (state) { state.stack.push(-pop(state) + pop(state)); },
@@ -161,8 +192,8 @@
 				".": function (state) { out(pop(state) + " "); },
 				",": function (state) { out(String.fromCharCode(pop(state))); },
 				"#": function (state) { state.col += state.cold; state.row += state.rowd; },
-				"g": function (state) { state.stack.push(field[pop(state)][pop(state)] || " "); },
-				"p": function (state) { let row = pop(state); var col = pop(state); var val = String.fromCharCode(pop(state)); field[row][col] = val; document.getElementById("table").children[row].children[col].innerText = val; },
+				"g": function (state) { let row = pop(state); var col = pop(state); if (check(state, row, col)) { state.stack.push(field[row][col].charCodeAt(0)); } },
+				"p": function (state) { let row = pop(state); var col = pop(state); if (check(state, row, col)) { var val = String.fromCharCode(pop(state)); field[row][col] = val; document.getElementById("table").children[row].children[col].innerText = val; } },
 				"t": function (state) { state_copy = JSON.parse(JSON.stringify(state)); state_copy.paused_event = state.paused_event; state_copy.cold *= -1; state_copy.rowd *= -1; thread(state_copy); },
 				// "&" input number TODO
 				// "~" input characte TODO
@@ -206,6 +237,10 @@
 				while(state.running) {
 					state.col += state.cold;
 					state.row += state.rowd;
+					if (state.row == height) state.row = 0;
+					else if (state.row == -1) state.row = state.height - 1;
+					if (state.col == width) state.col = 0;
+					else if (state.col == -1) state.col = state.width - 1;
 					if (state.count > state.max_loops) {
 						error(state, "Exceeded max instructions!");
 						state.running = false;
@@ -355,9 +390,12 @@ td { background: lightgrey; width: 1em; padding: 0px; text-align: center; }
 		<button id="copydown">Copy To Memory (Down v)</button>
 		<button id="copyup">Copy From Memory (Up ^)</button>
 		<hr/>
+		Sleep <input type="number" id="slice_sleep" value="1"/> ms every <input type="number" id="slice_loops" value="100"/> instructions, exit after <input type="number" id="max_loops" value="10000"/> instructions
+		<br/>
 		<button id="go">Go!</button>
-		(Sleep <input type="number" id="slice_sleep" value="1"/> ms every <input type="number" id="slice_loops" value="100"/> instructions, exit after <input type="number" id="max_loops" value="10000"/> instructions)
-		<button id="stop">Terminate!</button> <button id="toggle_pause">Pause all!</button> <button id="step">Step all!</button>
+		<button id="stop">Terminate!</button>
+		<button id="toggle_pause">Pause all!</button>
+		<button id="step">Step all!</button>
 		<table id="table">
 		</table>
 		<hr/>
