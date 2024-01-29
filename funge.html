@@ -15,36 +15,9 @@
 				saved_history = JSON.parse(window.localStorage.getItem("history") || "[]");
 				update_history();
 				copydown();
-				out_area = document.getElementById("out");
 				go();
 			}
-			let paused_wake = null;
-			function toggle_pause(e) {
-				if (paused_wake === null) {
-					pause();
-				} else {
-					unpause();
-				}
-			}
-			let pause_count = 0;
-			function pause() {
-				let paused_event = new Promise(function (r) { paused_wake = r; null; });
-				paused_event.id = pause_count++;
-				threads.forEach(t => t.paused_event = paused_event);
-				document.getElementById("toggle_pause").innerText = "Wake all!";
-			}
-			function unpause() {
-				paused_wake("unpause");
-				paused_wake = null;
-				document.getElementById("toggle_pause").innerText = "Pause all!";
-			}
-			function step(e) {
-				let old_wake = paused_wake;
-				pause();
-				if (old_wake !== null) {
-					old_wake("step");
-				}
-			}
+
 			let editing = {"state": false};
 			function keydown(e) {
 				let key = e.key;
@@ -63,8 +36,7 @@
 				if (editing.state) {
 					editing.element.classList.remove("editing");
 					if (key.length == 1) {
-						field[editing.row][editing.col] = key;
-						editing.element.innerText = key;
+						set_cell(editing.element, editing.col, editing.row, key.charCodeAt(0));
 						editing.col += 1;
 					} else if (key == "ArrowUp") {
 						editing.row -= 1;
@@ -99,11 +71,7 @@
 				editing.col = col;
 				editing.row = row;
 			}
-			function go() {
-				stop();
-				out_area.innerText = "";
-				thread({"col": -1, "row": 0, "cold": 1, "rowd": 0, running: true, mode: "normal", stack: [], paused_event: null});
-			}
+
 			let saved_history;
 			function append_save() {
 				let current = {
@@ -141,12 +109,61 @@
 					history_elt.appendChild(e);
 				}
 			}
-			function stop() {
-				while(threads.length>0) {
-					threads.pop().running = false;
+
+			let run_state = {
+				paused_wake: null,
+				paused_event: null,
+				slice_loops: 1,
+				slice_sleep: 20,
+				running: false,
+				can_run: true,
+				threads: [],
+			};
+			function toggle_pause(e) {
+				if (run_state.paused_wake === null) {
+					pause();
+				} else {
+					unpause();
 				}
 			}
-			let out_area;
+			function pause() {
+				run_state.paused_event = new Promise(function (r) { run_state.paused_wake = r; });
+				document.getElementById("toggle_pause").innerText = "Wake all!";
+			}
+			function unpause() {
+				let old_wake = run_state.paused_wake;
+				run_state.paused_wake = null;
+				document.getElementById("toggle_pause").innerText = "Pause all!";
+				if (old_wake !== null) {
+					old_wake(run_state.threads.keys());
+				}
+			}
+			function step(e) {
+				let old_wake = run_state.paused_wake;
+				pause();
+				if (old_wake !== null) {
+					old_wake(run_state.threads.keys());
+				}
+			}
+			function new_thread(col, row, cold, rowd) {
+				return {"col": col, "row": row, "cold": cold, "rowd": rowd, running: true, mode: "normal", stack: []};
+			}
+			function split_thread(old_thread) {
+				return new_thread(old_thread.col, old_thread.row, -old_thread.cold, -old_thread.rowd, JSON.parse(JSON.stringify(old_thread.stack)));
+			}
+			function go() {
+				stop();
+				run_state.threads = [];
+				document.getElementById("out").innerText = "";
+				let thread = new_thread(-1, 0, 1, 0, []);
+				run_state.threads.push(thread);
+				main_loop();
+			}
+			function stop() {
+				run_state.can_run = run_state.running = false;
+				unpause();
+			}
+
 			function pop(state) {
 				if (state.stack.length > 0) {
 					return state.stack.pop();
@@ -156,132 +173,237 @@
 				}
 			}
 			function check(state, row, col) {
-				console.log("" + row + " " + col);
 				if (row < 0 || row >= height) error(state, "Row " + row + " is out of bounds");
 				else if (col < 0 || col >= height) error(state, "Col " + col + " is out of bounds");
 				else return true;
 			}
-			let instructions = {
-				"+": function (state) { state.stack.push(pop(state) + pop(state)); },
-				"-": function (state) { state.stack.push(-pop(state) + pop(state)); },
-				"*": function (state) { state.stack.push(pop(state) * pop(state)); },
-				"/": function (state) { state.stack.push(Math.floor(pop(state) / pop(state))); },
-				"%": function (state) { state.stack.push(pop(state) % pop(state)); },
-				"!": function (state) { state.stack.push(pop(state) == 0 ? 1 : 0); },
-				"`": function (state) { state.stack.push(pop(state) < pop(state) ? 1 : 0); },
-				"<": function (state) { state.cold = -1; state.rowd =  0; },
-				">": function (state) { state.cold =  1; state.rowd =  0; },
-				"^": function (state) { state.cold =  0; state.rowd = -1; },
-				"v": function (state) { state.cold =  0; state.rowd =  1; },
-				// "?" random direction, TODO.
-				"_": function (state) { state.rowd =  0; state.cold = pop(state) == 0 ? 1 : -1; },
-				"|": function (state) { state.cold =  0; state.rowd = pop(state) == 0 ? 1 : -1; },
-				'"': function (state) { state.mode = "string"; },
-				":": function (state) { state.stack.push(state.stack[state.stack.length-1]); },
-				"\\": function (state) { let a = pop(state); var b = pop(state); state.stack.push(a, b); },
-				"$": function (state) { pop(state); },
-				".": function (state) { out(pop(state) + " "); },
-				",": function (state) { out(String.fromCharCode(pop(state))); },
-				"#": function (state) { state.col += state.cold; state.row += state.rowd; },
-				"g": function (state) { let row = pop(state); var col = pop(state); if (check(state, row, col)) { state.stack.push(field[row][col].charCodeAt(0)); } },
-				"p": function (state) { let row = pop(state); var col = pop(state); if (check(state, row, col)) { var val = String.fromCharCode(pop(state)); field[row][col] = val; document.getElementById("table").children[row].children[col].innerText = val; document.getElementById("table").children[row].children[col].title = "" + val.charCodeAt(0); } },
-				"t": function (state) { state_copy = JSON.parse(JSON.stringify(state)); state_copy.paused_event = state.paused_event; state_copy.cold *= -1; state_copy.rowd *= -1; thread(state_copy); },
-				// "&" input number TODO
-				// "~" input characte TODO
-				"@": function (state) { oute("Normal termination!"); state.running = false; },
-				" ": function (state) { },
+			function set_field(state, col, row, val) {
+				if (check(state, col, row)) {
+					set_cell(document.getElementById("table").children[row].children[col], col, row, val);
+				} else {
+					console.log("out of bounds access " + state + " " + col + " " + row + " " + val);
+				}
+			}
+			function set_cell(cell, col, row, val) {
+				let val_str = String.fromCharCode(val);
+				field[row][col] = val;
+				document.getElementById("table").children[row].children[col].innerText = val_str;
+				document.getElementById("table").children[row].children[col].title = val;
+			}
+			function get_field(state, col, row, val) {
+				if (check(state, col, row)) {
+					return field[row][col];
+				}
+			}
+			let instructions_raw = {
+				"+": {
+					impl: function (state) { state.stack.push(pop(state) + pop(state)); },
+					desc: "b a -> b + a",
+				},
+				"-": {
+					impl: function (state) { state.stack.push(-pop(state) + pop(state)); },
+					desc: "b a -> b - a",
+				},
+				"*": {
+					impl: function (state) { state.stack.push(pop(state) * pop(state)); },
+					desc: "b a -> b * a",
+				},
+				"/": {
+					impl: function (state) { let a = pop(state); let b = pop(state); state.stack.push(Math.floor(b / a)); },
+					desc: "b a -> b // a",
+				},
+				"%": {
+					impl: function (state) { let a = pop(state); let b = pop(state); state.stack.push(b % a); },
+					desc: "b a -> b % a",
+				},
+				"!": {
+					impl: function (state) { state.stack.push(pop(state) == 0 ? 1 : 0); },
+					desc: "a -> a == 0 ? 1 : 0",
+				},
+				"`": {
+					impl: function (state) { state.stack.push(pop(state) < pop(state) ? 1 : 0); },
+					desc: "b a -> b > a ? 1 : 0",
+				},
+				"<": {
+					impl: function (state) { state.cold = -1; state.rowd =  0; },
+					desc: "-> ; go left",
+				},
+				">": {
+					impl: function (state) { state.cold =  1; state.rowd =  0; },
+					desc: "-> ; go right",
+				},
+				"^": {
+					impl: function (state) { state.cold =  0; state.rowd = -1; },
+					desc: "-> ; go up",
+				},
+				"v": {
+					impl: function (state) { state.cold =  0; state.rowd =  1; },
+					desc: "-> ; go down",
+				},
+				// "?".charCodeAt(0) random direction, TODO.
+				"_": {
+					impl: function (state) { state.rowd =  0; state.cold = pop(state) == 0 ? 1 : -1; },
+					desc: "a -> ; a == 0 ? go right : go left",
+				},
+				"|": {
+					impl: function (state) { state.cold =  0; state.rowd = pop(state) == 0 ? 1 : -1; },
+					desc: "a -> ; a == 0 ? go down : go up",
+				},
+				'"': {
+					impl: function (state) { state.mode = "string"; },
+					desc: "; toggle string mode",
+				},
+				":": {
+					impl: function (state) { state.stack.push(state.stack[state.stack.length-1]); },
+					desc: "a -> a a",
+				},
+				"\\": {
+					impl: function (state) { let a = pop(state); var b = pop(state); state.stack.push(a, b); },
+					desc: "b a -> a b",
+				},
+				"$": {
+					impl: function (state) { pop(state); },
+					desc: "a ->",
+				},
+				".": {
+					impl: function (state) { out(pop(state) + " "); },
+					desc: "a -> ; output a",
+				},
+				",": {
+					impl: function (state) { out(String.fromCharCode(pop(state))); },
+					desc: "a -> ; output chr(a)",
+				},
+				"#": {
+					impl: function (state) { state.col += state.cold; state.row += state.rowd; },
+					desc: "; jump one cell",
+				},
+				"g": {
+					impl: function (state) { let row = pop(state); var col = pop(state); state.stack.push(get_field(state, col, row)); },
+					desc: "col row -> field[row][col]",
+				},
+				"p": {
+					impl: function (state) { let row = pop(state); var col = pop(state); var val = pop(state); set_field(state, col, row, val); },
+					desc: "val row col -> ; field[row][col] = val",
+				},
+				"t": {
+					impl: function (state) { run_state.threads.push(split_thread(state)); },
+					desc: "; create new thread in reverse direction",
+				},
+				// "&".charCodeAt(0) input number TODO
+				// "~".charCodeAt(0) input characte TODO
+				"@": {
+					impl: function (state) { oute("Normal termination!"); state.running = false; },
+					desc: "; stop current thread",
+				},
+				" ": {
+					impl: function (state) { },
+					desc: "; no-op",
+				},
 			};
 			for(let i=0; i<10; i++) {
 				const j = i; // Prevent any capture shenanigans.
-				instructions["" + i] = function (state) { state.stack.push(j); };
+				instructions_raw["" + i] = {
+					impl: function (state) { state.stack.push(j); },
+					desc: "-> " + i,
+				};
 			}
+			// Fast access instructions array.
+			let instructions = {};
+			for(let [s, val] of Object.entries(instructions_raw)) {
+				instructions[s.charCodeAt(0)] = val.impl;
+			}
+
 			function out(s) {
-				out_area.appendChild(document.createTextNode(s));
+				document.getElementById("out").appendChild(document.createTextNode(s));
 			}
 			function oute(s) {
 				let span = document.createElement("p");
 				span.className = "error";
 				span.innerText = s;
-				out_area.appendChild(span);
+				document.getElementById("out").appendChild(span);
 			}
 			function outnl() {
-				out_area.appendChild(document.createElement("br"));
+				document.getElementById("out").appendChild(document.createElement("br"));
 			}
 			function error(state, message) {
 				state.running = false;
 				oute("ERROR: " + message);
 				oute("State was: " + JSON.stringify(state));
 			}
+
 			let field = [];
-			let threads = [];
 			async function sleep(ms) {
 				await new Promise(r => setTimeout(r, ms));
 			}
-			async function thread(state) {
-				threads.push(state);
-				state.count = 0;
-				state.slice_loops = document.getElementById("slice_loops").value;
-				state.slice_sleep = document.getElementById("slice_sleep").value;
-				state.max_loops = document.getElementById("max_loops").value;
-				let highlighted = document.getElementById("table").children[state.row + state.rowd].children[state.col + state.cold];
-				highlighted.classList.add("active");
-				while(state.running) {
-					state.col += state.cold;
-					state.row += state.rowd;
-					if (state.row == field.length) state.row = 0;
-					else if (state.row == -1) state.row = field.length - 1;
-					if (state.col == field[0].length) state.col = 0;
-					else if (state.col == -1) state.col = field[0].length - 1;
-					if (state.count > state.max_loops) {
-						error(state, "Exceeded max instructions!");
-						state.running = false;
+			async function main_loop() {
+				let ticks = 0;
+				run_state.running = true;
+				while(run_state.threads.length > 0) {
+					if (run_state.paused_event) {
+						let paused_event = run_state.paused_event;
+						run_state.paused_event = null;
+						await paused_event;
+					}
+					let count = 0;
+					let to_unhighlight = new Set();
+					for(let i=0; i<run_state.threads.length; i++) {
+						if (run_state.threads[i].highlighted)
+							to_unhighlight.add(run_state.threads[i].highlighted);
+					}
+					while(count < run_state.slice_loops) {
+						// This will _not_ iterate over newly-added threads.
+						run_state.threads.forEach(thread => tick(thread));
+						count += run_state.threads.length;
+						run_state.threads = run_state.threads.filter(t => t.running);
+					}
+					ticks += count;
+					let to_highlight = new Set();
+					for(let i=0; i<run_state.threads.length; i++) {
+						let state = run_state.threads[i];
+						let cell = document.getElementById("table").children[state.row].children[state.col];
+						to_unhighlight.delete(cell);
+						to_highlight.add(cell);
+						state.highlighted = cell;
+					}
+					to_unhighlight.forEach(a => a.classList.remove("active"));
+					if (ticks > document.getElementById("max_loops").value)
+						error(run_state, "Ran out of ticks!");
+					if (!run_state.running)
 						break;
-					}
-					let slept = false;
-					if (state.paused_event !== null) {
-						highlighted.classList.remove("active");
-						highlighted = document.getElementById("table").children[state.row].children[state.col];
-						highlighted.classList.add("active");
-						let paused_event = state.paused_event;
-						console.log("Awaiting unpause " + paused_event.id + " " + JSON.stringify(state));
-						let result = await paused_event;
-						if (state.paused_event === paused_event)
-							state.paused_event = null;
-						console.log("Unpaused " + paused_event.id + " " + JSON.stringify(result) + " " + JSON.stringify(state));
-						slept = true;
-					}
-					if (!slept && state.count % state.slice_loops == 0) {
-						highlighted.classList.remove("active");
-						highlighted = document.getElementById("table").children[state.row].children[state.col];
-						highlighted.classList.add("active");
-						// Give the browser back some time.
-						await sleep(state.slice_sleep);
-					}
-					let symbol = field[state.row][state.col];
-					if (state.mode == "normal") {
-						let instruction = instructions[symbol];
-						if (instruction == null) {
-							error(state, "Invalid instruction: " + symbol);
-						} else {
-							try {
-								instruction(state);
-							} catch (err) {
-								error(state, "Exception caught: " + err.message);
-							}
-						}
-					} else if (state.mode == "string") {
-						if (symbol == '"') {
-							state.mode = "normal";
-						} else {
-							state.stack.push(symbol.charCodeAt(0));
-						}
-					}
-					state.count += 1;
+					to_highlight.forEach(a => a.classList.add("active"));
+					await sleep(run_state.slice_sleep);
 				}
-				idx = threads.findIndex(x => x === state);
-				threads.splice(idx, 1);
-				highlighted.classList.remove("active");
+				console.log("exited main_loop with ticks " + ticks);
 			}
+			function tick(state) {
+				state.count += 1;
+				state.col += state.cold;
+				state.row += state.rowd;
+				if (state.row == field.length) state.row = 0;
+				else if (state.row == -1) state.row = field.length - 1;
+				if (state.col == field[0].length) state.col = 0;
+				else if (state.col == -1) state.col = field[0].length - 1;
+				let symbol = field[state.row][state.col];
+				if (state.mode == "normal") {
+					let instruction = instructions[symbol];
+					if (instruction == null) {
+						error(state, "Invalid instruction: " + symbol);
+					} else {
+						try {
+							instruction(state);
+						} catch (err) {
+							error(state, "Exception caught: " + err.message);
+						}
+					}
+				} else if (state.mode == "string") {
+					if (symbol == '"'.charCodeAt(0)) {
+						state.mode = "normal";
+					} else {
+						state.stack.push(symbol);
+					}
+				}
+			}
+
 			function copydown() {
 				let lines = document.getElementById("area").value.split("\n");
 				let table = document.getElementById("table");
@@ -319,10 +441,8 @@
 						if (j >= line.length)
 							val = " ";
 						else
-							val = line[j]
-						row.children[j].innerText = val == ' ' ? "\u00a0" : val;
-						row.children[j].title = "" + val.charCodeAt(0);
-						field[i][j] = val;
+							val = line[j];
+						set_cell(row.children[j], j, i, val.charCodeAt(0));
 					}
 				}
 				append_save();
@@ -338,7 +458,7 @@
 					let linebuf = "";
 					let row = field[i];
 					for(let j=0; j<row.length; j++) {
-						linebuf += field[i][j];
+						linebuf += String.fromCharCode(field[i][j]);
 						if (field[i][j] != " ") {
 							line += linebuf;
 							linebuf = "";
