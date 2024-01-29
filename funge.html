@@ -235,10 +235,10 @@
 				while(state.running) {
 					state.col += state.cold;
 					state.row += state.rowd;
-					if (state.row == height) state.row = 0;
-					else if (state.row == -1) state.row = state.height - 1;
-					if (state.col == width) state.col = 0;
-					else if (state.col == -1) state.col = state.width - 1;
+					if (state.row == field.length) state.row = 0;
+					else if (state.row == -1) state.row = field.length - 1;
+					if (state.col == field[0].length) state.col = 0;
+					else if (state.col == -1) state.col = field[0].length - 1;
 					if (state.count > state.max_loops) {
 						error(state, "Exceeded max instructions!");
 						state.running = false;
