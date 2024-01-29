@@ -17,13 +17,6 @@
 				copydown();
 				out_area = document.getElementById("out");
 				go();
-				let p = new Promise(r => setTimeout(r, 10000));
-				async function f(i) {
-					await p;
-					console.log("test" + i + Date.now() / 1000);
-				}
-				f(1);
-				f(2);
 			}
 			let paused_wake = null;
 			function toggle_pause(e) {
