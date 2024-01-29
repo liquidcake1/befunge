@@ -11,10 +11,12 @@
 				document.getElementById("toggle_pause").addEventListener("click", toggle_pause);
 				document.getElementById("step").addEventListener("click", step);
 				document.getElementById("history").addEventListener("change", load_history);
+				document.getElementById("speed").addEventListener("input", set_speed);
 				window.addEventListener('keydown', keydown, false);
 				saved_history = JSON.parse(window.localStorage.getItem("history") || "[]");
 				update_history();
 				copydown();
+				set_speed();
 				go();
 			}
 
@@ -119,6 +121,18 @@
 				can_run: true,
 				threads: [],
 			};
+			function set_speed(e) {
+				let raw_speed = document.getElementById("speed").value;
+				if (raw_speed > 0) {
+					run_state.slice_sleep = 1;
+					run_state.slice_loops = Math.floor(1.1 ** raw_speed);
+				} else {
+					run_state.slice_sleep = Math.floor(1.1 ** -raw_speed);
+					run_state.slice_loops = 1;
+				}
+				document.getElementById("slice_sleep").innerText = run_state.slice_sleep;
+				document.getElementById("slice_loops").innerText = run_state.slice_loops;
+			}
 			function toggle_pause(e) {
 				if (run_state.paused_wake === null) {
 					pause();
@@ -135,14 +149,14 @@
 				run_state.paused_wake = null;
 				document.getElementById("toggle_pause").innerText = "Pause all!";
 				if (old_wake !== null) {
-					old_wake(run_state.threads.keys());
+					old_wake(run_state.step_loops);
 				}
 			}
 			function step(e) {
 				let old_wake = run_state.paused_wake;
 				pause();
 				if (old_wake !== null) {
-					old_wake(run_state.threads.keys());
+					old_wake(1);
 				}
 			}
 			function new_thread(col, row, cold, rowd) {
@@ -188,7 +202,10 @@
 				let val_str = String.fromCharCode(val);
 				field[row][col] = val;
 				document.getElementById("table").children[row].children[col].innerText = val_str;
-				document.getElementById("table").children[row].children[col].title = val;
+				let title = "(" + col + "," + row + ")=" + val + " (" + val_str + ")";
+				if (instructions_raw[val_str] !== undefined)
+					title += ": " + instructions_raw[val_str].desc;
+				document.getElementById("table").children[row].children[col].title = title;
 			}
 			function get_field(state, col, row, val) {
 				if (check(state, col, row)) {
@@ -198,56 +215,56 @@
 			let instructions_raw = {
 				"+": {
 					impl: function (state) { state.stack.push(pop(state) + pop(state)); },
-					desc: "b a -> b + a",
+					desc: "b a → b + a",
 				},
 				"-": {
 					impl: function (state) { state.stack.push(-pop(state) + pop(state)); },
-					desc: "b a -> b - a",
+					desc: "b a → b - a",
 				},
 				"*": {
 					impl: function (state) { state.stack.push(pop(state) * pop(state)); },
-					desc: "b a -> b * a",
+					desc: "b a → b * a",
 				},
 				"/": {
 					impl: function (state) { let a = pop(state); let b = pop(state); state.stack.push(Math.floor(b / a)); },
-					desc: "b a -> b // a",
+					desc: "b a → b // a",
 				},
 				"%": {
 					impl: function (state) { let a = pop(state); let b = pop(state); state.stack.push(b % a); },
-					desc: "b a -> b % a",
+					desc: "b a → b % a",
 				},
 				"!": {
 					impl: function (state) { state.stack.push(pop(state) == 0 ? 1 : 0); },
-					desc: "a -> a == 0 ? 1 : 0",
+					desc: "a → a == 0 ? 1 : 0",
 				},
 				"`": {
 					impl: function (state) { state.stack.push(pop(state) < pop(state) ? 1 : 0); },
-					desc: "b a -> b > a ? 1 : 0",
+					desc: "b a → b > a ? 1 : 0",
 				},
 				"<": {
 					impl: function (state) { state.cold = -1; state.rowd =  0; },
-					desc: "-> ; go left",
+					desc: "() → (); go left",
 				},
 				">": {
 					impl: function (state) { state.cold =  1; state.rowd =  0; },
-					desc: "-> ; go right",
+					desc: "() → (); go right",
 				},
 				"^": {
 					impl: function (state) { state.cold =  0; state.rowd = -1; },
-					desc: "-> ; go up",
+					desc: "() → (); go up",
 				},
 				"v": {
 					impl: function (state) { state.cold =  0; state.rowd =  1; },
-					desc: "-> ; go down",
+					desc: "() → (); go down",
 				},
 				// "?".charCodeAt(0) random direction, TODO.
 				"_": {
 					impl: function (state) { state.rowd =  0; state.cold = pop(state) == 0 ? 1 : -1; },
-					desc: "a -> ; a == 0 ? go right : go left",
+					desc: "a → (); a == 0 ? go right : go left",
 				},
 				"|": {
 					impl: function (state) { state.cold =  0; state.rowd = pop(state) == 0 ? 1 : -1; },
-					desc: "a -> ; a == 0 ? go down : go up",
+					desc: "a → (); a == 0 ? go down : go up",
 				},
 				'"': {
 					impl: function (state) { state.mode = "string"; },
@@ -255,23 +272,23 @@
 				},
 				":": {
 					impl: function (state) { state.stack.push(state.stack[state.stack.length-1]); },
-					desc: "a -> a a",
+					desc: "a → a a",
 				},
 				"\\": {
 					impl: function (state) { let a = pop(state); var b = pop(state); state.stack.push(a, b); },
-					desc: "b a -> a b",
+					desc: "b a → a b",
 				},
 				"$": {
 					impl: function (state) { pop(state); },
-					desc: "a ->",
+					desc: "a → ()",
 				},
 				".": {
 					impl: function (state) { out(pop(state) + " "); },
-					desc: "a -> ; output a",
+					desc: "a → (); output a",
 				},
 				",": {
 					impl: function (state) { out(String.fromCharCode(pop(state))); },
-					desc: "a -> ; output chr(a)",
+					desc: "a → (); output chr(a)",
 				},
 				"#": {
 					impl: function (state) { state.col += state.cold; state.row += state.rowd; },
@@ -279,11 +296,11 @@
 				},
 				"g": {
 					impl: function (state) { let row = pop(state); var col = pop(state); state.stack.push(get_field(state, col, row)); },
-					desc: "col row -> field[row][col]",
+					desc: "col row → field[row][col]",
 				},
 				"p": {
 					impl: function (state) { let row = pop(state); var col = pop(state); var val = pop(state); set_field(state, col, row, val); },
-					desc: "val row col -> ; field[row][col] = val",
+					desc: "val row col → (); field[row][col] = val",
 				},
 				"t": {
 					impl: function (state) { run_state.threads.push(split_thread(state)); },
@@ -304,7 +321,7 @@
 				const j = i; // Prevent any capture shenanigans.
 				instructions_raw["" + i] = {
 					impl: function (state) { state.stack.push(j); },
-					desc: "-> " + i,
+					desc: "() → " + i,
 				};
 			}
 			// Fast access instructions array.
@@ -339,10 +356,11 @@
 				let ticks = 0;
 				run_state.running = true;
 				while(run_state.threads.length > 0) {
+					slice_loops = run_state.slice_loops;
 					if (run_state.paused_event) {
 						let paused_event = run_state.paused_event;
 						run_state.paused_event = null;
-						await paused_event;
+						slice_loops = await paused_event;
 					}
 					let count = 0;
 					let to_unhighlight = new Set();
@@ -350,7 +368,7 @@
 						if (run_state.threads[i].highlighted)
 							to_unhighlight.add(run_state.threads[i].highlighted);
 					}
-					while(count < run_state.slice_loops) {
+					while(count < slice_loops && run_state.threads.length > 0) {
 						// This will _not_ iterate over newly-added threads.
 						run_state.threads.forEach(thread => tick(thread));
 						count += run_state.threads.length;
@@ -490,11 +508,19 @@ td { background: lightgrey; width: 1em; padding: 0px; text-align: center; }
 	<body onload="load();">
 		<h1>Befunge-ish interpreter</h1>
 		<p>© 2024. This work is openly licensed via <i><a href="https://creativecommons.org/publicdomain/zero/1.0/">CC0</a></i></p>
-		<p>You can click the grid to edit cells. Press escape to release input
-		grab. Saves (to browser local storage) are made each time you copy
-		up/down. Max 200. Probably copy/paste elsewhere if it's important.</p>
+		<ul>
+			<li>You can click the grid to edit cells.</li>
+			<li>Press escape to release input grab.</li>
+			<li>Hover a cell for co-ordinates and interpretation.</li>
+			<li>Saves (to browser local storage) are made each time you copy up/down. Max 200. Probably copy/paste elsewhere if it's important.</li>
+		</ul>
 		<p>Implements (or tries to implement) <a href="https://en.wikipedia.org/wiki/Befunge">Befunge</a> with minor bits from <a href="https://esolangs.org/wiki/Funge-98">Funge-98</a>.</p>
-		<p>Bugs are pretty rife. It's a WIP.</p>
+		<p>Bugs are pretty rife. It's a WIP. ChangeLog:</p>
+		<ul>
+			<li>2024-01-29: Reworked a lot of inner mechanics, added tooltip, added slider to change speed.</li>
+			<li>2024-01-28: Working puzzle with many bugs.</li>
+			<li>2024-01-27: Mostly working interpreter.</li>
+		</ul>
 		Edit code:<br/>
 		<textarea id="area" rows="25" cols="80">#vt                                    v  Made for LCOLONQ and
                                        #  https://itch.io/jam/virtualharby
@@ -531,7 +557,8 @@ pv-" "_v#-"\"_v#-"/"&lt;|           #           #                               
 		<button id="copydown">Copy To Memory (Down v)</button>
 		<button id="copyup">Copy From Memory (Up ^)</button>
 		<hr/>
-		Sleep <input type="number" id="slice_sleep" value="10"/> ms every <input type="number" id="slice_loops" value="1"/> instructions, exit after <input type="number" id="max_loops" value="1000000"/> instructions
+		<input type="range" min="-100" max="100" value="0" id="speed"/>
+		Sleep <span id="slice_sleep">?</span>ms every <span id="slice_loops">?</span> instructions, exit after <input type="number" id="max_loops" value="1000000"/> instructions
 		<br/>
 		<button id="go">Go!</button>
 		<button id="stop">Terminate!</button>
