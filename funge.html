@@ -23,11 +23,28 @@
 				}
 				copydown();
 				set_speed();
-				go();
 			}
 			let levels = [
 				{
-					name: "Challenge",
+					name: "Coding Level 1: Baby steps",
+					data: "\n\nLevel 1:\n- Output exactly the contents of the box:\n\n +--------+\n |You win!|\n +--------+",
+					width: 80,
+					height: 25,
+				},
+				{
+					name: "Coding Level 2: \"Baby\" steps",
+					data: "\n\nLevel 2:\n- Output exactly the contents of the box:\n\n +----------+\n |You \"win\"!|\n +----------+",
+					width: 80,
+					height: 25,
+				},
+				{
+					name: "Coding Level 3: Parrot steps",
+					data: "\n\nLevel 3:\n- Write \"You win!\" into the box.\n- Do not manually edit the box.\n\n +--------+\n |        |\n +--------+",
+					width: 80,
+					height: 25,
+				},
+				{
+					name: "Comprehension Challenge",
 					data: "" +
 						'#vt                                    v  Made for LCOLONQ and\n' +
 						'                                       #  https://itch.io/jam/virtualharby\n' +
@@ -36,10 +53,10 @@
 						'  whitespace.        |                 #                                       |\n' +
 						'* Edit only within   |          ####   #   ####                                |\n' +
 						'  square.            |         #    #  #  #    #                               |\n' +
-						'* Output exactly:    |        #      #####      #                              |\n' +
-						'  You win            |       #        ###        #                             |\n' +
-						'  Normal termination!|       >#v>>>>>>>>>>>>>>>>>v                             |\n' +
-						'  Normal termination!|       ^ >0"niw uoY":!v!:< v                             |\n' +
+						'* Terminate both     |        #      #####      #                              |\n' +
+						'  threads normally.  |       #        ###        #                             |\n' +
+						'* Output exactly:    |       >#v>>>>>>>>>>>>>>>>>v                             |\n' +
+						'  You win!           |       ^ >0"niw uoY":!v!:< v                             |\n' +
 						'#####################|       ^ @    p+990"@"_,#^ v                             |\n' +
 						'                     |       ^<<<<<<<<<<<<<<<<<<<<                             |\n' +
 						' >994++21p331p041pv  |        #                 #                              |\n' +
@@ -633,11 +650,15 @@ td { font-family: monospace; background: lightgrey; width: 1em; padding: 0px; te
 			<li>Press escape to release input grab.</li>
 			<li>Hover a cell for co-ordinates and interpretation.</li>
 			<li>Saves (to browser local storage) are made each time you copy up/down. Max 200. Probably copy/paste elsewhere if it's important.</li>
-			<li>The default should always be reloaded as the newest save if you re-enter the URL. Else it's the earliest history entry. Else delete cookies/use private mode/something.</li>
+			<li>The page will always load the first level by default. Refreshing on Firefox at least will generally preserve the textarea content. Don't rely on it, though.</li>
+			<li>Output is below the grid. You might have to scroll down.</li>
+			<li>There are currently three coding tutorial levels, and a Comprehension Challenge, which is the Real Game.</li>
+			<li><b>Probably make sure you "Copy From Memory" before running if you're using the "p" operator (or doing the Comprehension Challenge).</b></li>
 		</ul>
 		<p>Implements (or tries to implement) <a href="https://en.wikipedia.org/wiki/Befunge">Befunge</a> with minor bits from <a href="https://esolangs.org/wiki/Funge-98">Funge-98</a>.</p>
 		<p>Bugs are pretty rife. It's a WIP. ChangeLog:</p>
 		<ul>
+			<li>2024-01-30: Thread debug display, level loader, add coding tutorial levels.</li>
 			<li>2024-01-29: Reworked a lot of inner mechanics, added tooltip, added slider to change speed.</li>
 			<li>2024-01-28: Working puzzle with many bugs.</li>
 			<li>2024-01-27: Mostly working interpreter.</li>
@@ -665,6 +686,7 @@ td { font-family: monospace; background: lightgrey; width: 1em; padding: 0px; te
 		<table id="table">
 		</table>
 		<hr/>
+		<p>Output:</p>
 		<div id="out"></div>
 	</body>
 </html>
