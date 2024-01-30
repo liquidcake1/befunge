@@ -118,7 +118,6 @@
 				slice_loops: 1,
 				slice_sleep: 20,
 				running: false,
-				can_run: true,
 				threads: [],
 			};
 			function set_speed(e) {
@@ -174,7 +173,6 @@
 				main_loop();
 			}
 			function stop() {
-				run_state.can_run = run_state.running = false;
 				unpause();
 			}
 
