@@ -15,10 +15,48 @@
 				window.addEventListener('keydown', keydown, false);
 				saved_history = JSON.parse(window.localStorage.getItem("history") || "[]");
 				update_history();
+				load_levels();
+				if (document.getElementById("area").value == "") {
+					load_level();
+				}
+				console.log(JSON.stringify(document.getElementById("area").value));
 				copydown();
 				set_speed();
 				go();
 			}
+			let levels = [
+				{
+					name: "Challenge",
+					data: "" +
+						'#vt                                    v  Made for LCOLONQ and\n' +
+						'                                       #  https://itch.io/jam/virtualharby\n' +
+						'  Challenge:         +---------------------------------------------------------+\n' +
+						'* Edit only          |                 #                                       |\n' +
+						'  whitespace.        |                 #                                       |\n' +
+						'* Edit only within   |          ####   #   ####                                |\n' +
+						'  square.            |         #    #  #  #    #                               |\n' +
+						'* Output exactly:    |        #      #####      #                              |\n' +
+						'  You win            |       #        ###        #                             |\n' +
+						'  Normal termination!|       >#v>>>>>>>>>>>>>>>>>v                             |\n' +
+						'  Normal termination!|       ^ >0"niw uoY":!v!:< v                             |\n' +
+						'#####################|       ^ @    p+990"@"_,#^ v                             |\n' +
+						'                     |       ^<<<<<<<<<<<<<<<<<<<<                             |\n' +
+						' >994++21p331p041pv  |        #                 #                              |\n' +
+						'v             p151<  |         #               #                               |\n' +
+						'>21g:31gg\\"#"\\31gp::v|          #             #                                |\n' +
+						'pv-" "_v#-"\\"_v#-"/"<|           #           #                                 |\n' +
+						' >#v_v  v-10$$<      |            #         #                                  |\n' +
+						' v  <  > $1>:41g*\\51v|             #       #                                   |\n' +
+						'        >  ^v15p14*g<|              #     #                                    |\n' +
+						'   >  041g-4 1p051g-v|               #   #                                     |\n' +
+						' v" "<     p<     15<|                # #                                      |\n' +
+						' >21g:31g:51g+31p\\41v|                 #                                       |\n' +
+						'^              p12+g<|                                                         |\n' +
+						'                     +---------------------------------------------------------+',
+					width: 80,
+					height: 25,
+				}
+			];
 
 			let editing = {"state": false};
 			function keydown(e) {
@@ -109,6 +147,28 @@
 					e.value = i;
 					e.innerText = saved_history[i].ts;
 					history_elt.appendChild(e);
+				}
+			}
+
+			function load_level() {
+				let level_elt = document.getElementById("levels");
+				let level_data = levels[parseInt(level_elt.options[level_elt.selectedIndex].value)];
+				console.log("Loading" + level_data.data);
+				document.getElementById("area").value = level_data.data;
+				document.getElementById("area").cols = level_data.width;
+				document.getElementById("area").rows = level_data.height;
+				document.getElementById("width").value = level_data.width;
+				document.getElementById("height").value = level_data.height;
+			}
+			function load_levels() {
+				let level_elt = document.getElementById("levels");
+				while(level_elt.children.length > 0)
+					level_elt.removeChild(level_elt.children[0]);
+				for(let i=0; i<levels.length; i++) {
+					let e = document.createElement("option");
+					e.value = i;
+					e.innerText = levels[i].name;
+					level_elt.appendChild(e);
 				}
 			}
 
@@ -581,37 +641,13 @@ td { font-family: monospace; background: lightgrey; width: 1em; padding: 0px; te
 			<li>2024-01-27: Mostly working interpreter.</li>
 		</ul>
 		Edit code:<br/>
-		<textarea id="area" rows="25" cols="80">#vt                                    v  Made for LCOLONQ and
-                                       #  https://itch.io/jam/virtualharby
-  Challenge:         +---------------------------------------------------------+
-* Edit only          |                 #                                       |
-  whitespace.        |                 #                                       |
-* Edit only within   |          ####   #   ####                                |
-  square.            |         #    #  #  #    #                               |
-* Output exactly:    |        #      #####      #                              |
-  You win            |       #        ###        #                             |
-  Normal termination!|       &gt;#v&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;v                             |
-  Normal termination!|       ^ &gt;0"niw uoY":!v!:&lt; v                             |
-#####################|       ^ @    p+990"@"_,#^ v                             |
-                     |       ^&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;                             |
- &gt;994++21p331p041pv  |        #                 #                              |
-v             p151&lt;  |         #               #                               |
-&gt;21g:31gg\"#"\31gp::v|          #             #                                |
-pv-" "_v#-"\"_v#-"/"&lt;|           #           #                                 |
- &gt;#v_v  v-10$$&lt;      |            #         #                                  |
- v  &lt;  &gt; $1&gt;:41g*\51v|             #       #                                   |
-        &gt;  ^v15p14*g&lt;|              #     #                                    |
-   &gt;  041g-4 1p051g-v|               #   #                                     |
- v" "&lt;     p&lt;     15&lt;|                # #                                      |
- &gt;21g:31g:51g+31p\41v|                 #                                       |
-^              p12+g&lt;|                                                         |
-                     +---------------------------------------------------------+
-</textarea>
+		<textarea id="area" rows="25" cols="80"></textarea>
 		<br/>
 		W=<input type="number" id="width" value="80"/>
 		H=<input type="number" id="height" value="25"/>
 		<br/>
-		Load: <select id="history"></select>
+		Levels: <select id="levels"></select>
+		History: <select id="history"></select>
 		<br/>
 		<button id="copydown">Copy To Memory (Down v)</button>
 		<button id="copyup">Copy From Memory (Up ^)</button>
