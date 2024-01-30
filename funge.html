@@ -142,37 +142,52 @@
 			function pause() {
 				run_state.paused_event = new Promise(function (r) { run_state.paused_wake = r; });
 				document.getElementById("toggle_pause").innerText = "Wake all!";
+				run_state.threads.forEach(function (thread) {
+					thread.info_elt.children[0].children[0].children[0].children[0].removeAttribute("disabled");
+				});
 			}
 			function unpause() {
 				let old_wake = run_state.paused_wake;
 				run_state.paused_wake = null;
 				document.getElementById("toggle_pause").innerText = "Pause all!";
+				run_state.threads.forEach(function (thread) {
+					thread.info_elt.children[0].children[0].children[0].children[0].setAttribute("disabled", "disabled");
+				});
 				if (old_wake !== null) {
-					old_wake(run_state.step_loops);
+					old_wake({});
 				}
 			}
 			function step(e) {
 				let old_wake = run_state.paused_wake;
 				pause();
 				if (old_wake !== null) {
-					old_wake(1);
+					old_wake({count: 1});
+				}
+			}
+			function step_thread(thread) {
+				let old_wake = run_state.paused_wake;
+				pause();
+				if (old_wake !== null) {
+					old_wake({threads: [thread], count: 1});
 				}
 			}
 			function new_thread(col, row, cold, rowd) {
-				return {"col": col, "row": row, "cold": cold, "rowd": rowd, running: true, mode: "normal", stack: []};
+				let thread_info = document.createElement("p");
+				document.getElementById("threads").appendChild(thread_info);
+				return {"col": col, "row": row, "cold": cold, "rowd": rowd, running: true, mode: "normal", stack: [], info_elt: thread_info};
 			}
 			function split_thread(old_thread) {
 				return new_thread(old_thread.col, old_thread.row, -old_thread.cold, -old_thread.rowd, JSON.parse(JSON.stringify(old_thread.stack)));
 			}
 			function go() {
 				stop();
-				run_state.threads = [];
 				document.getElementById("out").innerText = "";
 				let thread = new_thread(-1, 0, 1, 0, []);
 				run_state.threads.push(thread);
 				main_loop();
 			}
 			function stop() {
+				run_state.threads.forEach(function (thread) { thread.running = false; });
 				unpause();
 			}
 
@@ -357,11 +372,16 @@
 				let ticks = 0;
 				run_state.running = true;
 				while(run_state.threads.length > 0) {
-					slice_loops = run_state.slice_loops;
+					let slice_loops = run_state.slice_loops;
+					let limit_threads = null;
 					if (run_state.paused_event) {
 						let paused_event = run_state.paused_event;
 						run_state.paused_event = null;
-						slice_loops = await paused_event;
+						unpause_data = await paused_event;
+						if (unpause_data.count !== undefined)
+							slice_loops = unpause_data.count;
+						if (unpause_data.threads !== undefined)
+							limit_threads = unpause_data.threads;
 					}
 					let count = 0;
 					let to_unhighlight = new Set();
@@ -371,8 +391,13 @@
 					}
 					while(count < slice_loops && run_state.threads.length > 0) {
 						// This will _not_ iterate over newly-added threads.
-						run_state.threads.forEach(thread => tick(thread));
+						let to_iter = limit_threads !== null ? limit_threads : run_state.threads;
+						to_iter.forEach(thread => tick(thread));
 						count += run_state.threads.length;
+						let dead_threads = run_state.threads.filter(t => !t.running);
+						if (dead_threads.length > 0) {
+							dead_threads.forEach(dead_thread => document.getElementById("threads").removeChild(dead_thread.info_elt));
+						}
 						run_state.threads = run_state.threads.filter(t => t.running);
 					}
 					ticks += count;
@@ -390,6 +415,35 @@
 					if (!run_state.running)
 						break;
 					to_highlight.forEach(a => a.classList.add("active"));
+					run_state.threads.forEach(function (thread) {
+						if (thread.info_elt.children.length == 0) {
+							let button = document.createElement("button");
+							button.setAttribute("disabled", "disabled");
+							const this_thread = thread;
+							button.addEventListener("click", function () { step_thread(this_thread); });
+							button.innerText = "Step";
+							let thb = document.createElement("th");
+							thb.appendChild(button);
+							let table = document.createElement("table");
+							let tr = document.createElement("tr");
+							let th = document.createElement("th");
+							tr.appendChild(thb);
+							tr.appendChild(th);
+							table.appendChild(tr);
+							thread.info_elt.appendChild(table);
+						}
+						let tr = thread.info_elt.children[0].children[0];
+						tr.children[1].innerText = "(" + ("" + thread.col).padStart(3, "\u00a0") + "," + ("" + thread.row).padStart(3, "\u00a0") + ")";
+						while(tr.children.length > thread.stack.length + 2) {
+							tr.removeChild(tr.children[tr.children.length - 1]);
+						}
+						while(tr.children.length < thread.stack.length + 2) {
+							tr.appendChild(document.createElement("td"));
+						}
+						thread.stack.forEach(function (val, idx) {
+							tr.children[thread.stack.length - idx + 1].innerText = val;
+						});
+					});
 					await sleep(run_state.slice_sleep);
 				}
 				console.log("exited main_loop with ticks " + ticks);
@@ -498,11 +552,14 @@
 		</script>
 <style>
 table { border: black solid 1px; padding: 0px; }
-td { background: lightgrey; width: 1em; padding: 0px; text-align: center; }
+th { font-family: monospace; font-weight: normal; }
+td { font-family: monospace; background: lightgrey; width: 1em; padding: 0px; text-align: center; }
 #out { font-family: monospace; border: black solid 1px; }
 .error { background-color: red; margin: 0px; }
 .active { background-color: lightpink; }
 .editing { background-color: lightgreen; }
+#threads { border: black solid 1px; padding: 0px; }
+#threads > p { margin: 0px; }
 </style>
 				<title>Befunge</title>
 	</head>
@@ -566,6 +623,7 @@ pv-" "_v#-"\"_v#-"/"&lt;|           #           #                               
 		<button id="stop">Terminate!</button>
 		<button id="toggle_pause">Pause all!</button>
 		<button id="step">Step all!</button>
+		<div id="threads"><p>Threads</p></div>
 		<table id="table">
 		</table>
 		<hr/>
