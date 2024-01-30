@@ -201,7 +201,7 @@
 			function set_cell(cell, col, row, val) {
 				let val_str = String.fromCharCode(val);
 				field[row][col] = val;
-				document.getElementById("table").children[row].children[col].innerText = val_str;
+				document.getElementById("table").children[row].children[col].innerText = val_str == " " ? "\u00a0" : val_str;
 				let title = "(" + col + "," + row + ")=" + val + " (" + val_str + ")";
 				if (instructions_raw[val_str] !== undefined)
 					title += ": " + instructions_raw[val_str].desc;
@@ -257,7 +257,10 @@
 					impl: function (state) { state.cold =  0; state.rowd =  1; },
 					desc: "() → (); go down",
 				},
-				// "?".charCodeAt(0) random direction, TODO.
+				"?": {
+					impl: function (state) { let x = Math.floor(Math.random() * 4); state.cold = ((x % 2) * 2 - 1) * Math.floor(x / 2); state.rowd = ((x % 2) * 2 - 1) * ( 1 - Math.floor(x / 2)); },
+					desc: "() → (); go random cardinal",
+				},
 				"_": {
 					impl: function (state) { state.rowd =  0; state.cold = pop(state) == 0 ? 1 : -1; },
 					desc: "a → (); a == 0 ? go right : go left",
@@ -452,7 +455,7 @@
 						const coln = row.children.length;
 						td.addEventListener("click", function() { begin_edit(coln, rown, td); });
 						row.appendChild(td);
-						field[i].push(" ");
+						field[i].push(32);
 					}
 					for(let j=0; j<width; j++) {
 						let val;
@@ -513,6 +516,7 @@ td { background: lightgrey; width: 1em; padding: 0px; text-align: center; }
 			<li>Press escape to release input grab.</li>
 			<li>Hover a cell for co-ordinates and interpretation.</li>
 			<li>Saves (to browser local storage) are made each time you copy up/down. Max 200. Probably copy/paste elsewhere if it's important.</li>
+			<li>The default should always be reloaded as the newest save if you re-enter the URL. Else it's the earliest history entry. Else delete cookies/use private mode/something.</li>
 		</ul>
 		<p>Implements (or tries to implement) <a href="https://en.wikipedia.org/wiki/Befunge">Befunge</a> with minor bits from <a href="https://esolangs.org/wiki/Funge-98">Funge-98</a>.</p>
 		<p>Bugs are pretty rife. It's a WIP. ChangeLog:</p>
