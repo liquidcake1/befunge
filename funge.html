@@ -11,15 +11,16 @@
 				document.getElementById("toggle_pause").addEventListener("click", toggle_pause);
 				document.getElementById("step").addEventListener("click", step);
 				document.getElementById("history").addEventListener("change", load_history);
+				document.getElementById("levels").addEventListener("change", load_level);
 				document.getElementById("speed").addEventListener("input", set_speed);
 				window.addEventListener('keydown', keydown, false);
 				saved_history = JSON.parse(window.localStorage.getItem("history") || "[]");
 				update_history();
 				load_levels();
 				if (document.getElementById("area").value == "") {
+					document.getElementById("levels").selectedIndex = 1;
 					load_level();
 				}
-				console.log(JSON.stringify(document.getElementById("area").value));
 				copydown();
 				set_speed();
 				go();
@@ -131,6 +132,7 @@
 			}
 			function load_history() {
 				let history_elt = document.getElementById("history");
+				if (history_elt.selectedIndex == 0) return;
 				let history_data = saved_history[parseInt(history_elt.options[history_elt.selectedIndex].value)];
 				document.getElementById("area").value = history_data.data;
 				document.getElementById("area").cols = history_data.width;
@@ -140,8 +142,8 @@
 			}
 			function update_history() {
 				let history_elt = document.getElementById("history");
-				while(history_elt.children.length > 0)
-					history_elt.removeChild(history_elt.children[0]);
+				while(history_elt.children.length > 1)
+					history_elt.removeChild(history_elt.children[1]);
 				for(let i=0; i<saved_history.length; i++) {
 					let e = document.createElement("option");
 					e.value = i;
@@ -152,8 +154,8 @@
 
 			function load_level() {
 				let level_elt = document.getElementById("levels");
+				if (level_elt.selectedIndex == 0) return;
 				let level_data = levels[parseInt(level_elt.options[level_elt.selectedIndex].value)];
-				console.log("Loading" + level_data.data);
 				document.getElementById("area").value = level_data.data;
 				document.getElementById("area").cols = level_data.width;
 				document.getElementById("area").rows = level_data.height;
@@ -162,8 +164,8 @@
 			}
 			function load_levels() {
 				let level_elt = document.getElementById("levels");
-				while(level_elt.children.length > 0)
-					level_elt.removeChild(level_elt.children[0]);
+				while(level_elt.children.length > 1)
+					level_elt.removeChild(level_elt.children[1]);
 				for(let i=0; i<levels.length; i++) {
 					let e = document.createElement("option");
 					e.value = i;
@@ -646,8 +648,8 @@ td { font-family: monospace; background: lightgrey; width: 1em; padding: 0px; te
 		W=<input type="number" id="width" value="80"/>
 		H=<input type="number" id="height" value="25"/>
 		<br/>
-		Levels: <select id="levels"></select>
-		History: <select id="history"></select>
+		Levels: <select id="levels"><option value="-1">--</option></select>
+		History: <select id="history"><option value="-1">--</option></select>
 		<br/>
 		<button id="copydown">Copy To Memory (Down v)</button>
 		<button id="copyup">Copy From Memory (Up ^)</button>
