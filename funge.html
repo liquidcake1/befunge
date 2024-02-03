@@ -13,6 +13,7 @@
 				document.getElementById("history").addEventListener("change", load_history);
 				document.getElementById("levels").addEventListener("change", load_level);
 				document.getElementById("speed").addEventListener("input", set_speed);
+				document.addEventListener("click", click_document);
 				window.addEventListener('keydown', keydown, false);
 				saved_history = JSON.parse(window.localStorage.getItem("history") || "[]");
 				update_history();
@@ -83,8 +84,7 @@
 					key = " ";
 				}
 				if (key == "Escape") {
-					editing.state = false;
-					editing.element.classList.remove("editing");
+					end_edit();
 					return;
 				}
 				if (key.length != 1 && !key.startsWith("Arrow")) {
@@ -128,6 +128,17 @@
 				editing.element.classList.add("editing");
 				editing.col = col;
 				editing.row = row;
+			}
+			function click_document(e) {
+				if (e.target.closest('td'))
+					return;
+				if (editing.state)
+					end_edit();
+			}
+			function end_edit() {
+				console.log("end edit");
+				editing.state = false;
+				editing.element.classList.remove("editing");
 			}
 
 			let saved_history;
