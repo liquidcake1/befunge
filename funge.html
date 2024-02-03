@@ -229,13 +229,15 @@
 				}
 			}
 			function pause() {
-				run_state.paused_event = new Promise(function (r) { run_state.paused_wake = r; });
+				run_state.paused_event = new Promise(function (r) {
+					run_state.paused_wake = r;
+					// We shouldn't be in the sleep loop if paused.
+					if (awake_sleep != null) awake_sleep();
+				});
 				document.getElementById("toggle_pause").innerText = "Wake all!";
 				run_state.threads.forEach(function (thread) {
 					thread.info_elt.children[0].children[0].children[0].children[0].removeAttribute("disabled");
 				});
-				// We shouldn't be in the sleep loop if paused.
-				if (awake_sleep != null) awake_sleep();
 			}
 			function unpause() {
 				let old_wake = run_state.paused_wake;
@@ -268,12 +270,17 @@
 				return {"col": col, "row": row, "cold": cold, "rowd": rowd, running: true, mode: "normal", stack: [], info_elt: thread_info};
 			}
 			function split_thread(old_thread) {
-				return new_thread(old_thread.col, old_thread.row, -old_thread.cold, -old_thread.rowd, JSON.parse(JSON.stringify(old_thread.stack)));
+				return new_thread(old_thread.col - old_thread.cold, old_thread.row - old_thread.rowd, -old_thread.cold, -old_thread.rowd, JSON.parse(JSON.stringify(old_thread.stack)));
 			}
-			function go() {
+			async function go() {
 				stop();
+				if (run_state.running_promise != null) {
+					console.log("Waiting for last thread to exit");
+					await run_state.running_promise;
+					console.log("Last thread has exited");
+				}
 				document.getElementById("out").innerText = "";
-				let thread = new_thread(-1, 0, 1, 0, []);
+				let thread = new_thread(0, 0, 1, 0, []);
 				run_state.threads.push(thread);
 				main_loop();
 			}
@@ -465,53 +472,20 @@
 			async function main_loop() {
 				let ticks = 0;
 				run_state.running = true;
+				let running_wake = null;
+				run_state.running_promise = new Promise(r => { running_wake = r; });
 				while(run_state.threads.length > 0) {
 					let slice_loops = run_state.slice_loops;
 					let limit_threads = null;
 					let need_sleep = true;
-					if (run_state.paused_event) {
-						let paused_event = run_state.paused_event;
-						run_state.paused_event = null;
-						unpause_data = await paused_event;
-						if (unpause_data.count !== undefined) {
-							need_sleep = false;
-							slice_loops = unpause_data.count;
-						}
-						if (unpause_data.threads !== undefined)
-							limit_threads = unpause_data.threads;
-					}
-					let count = 0;
 					let to_unhighlight = new Set();
-					for(let i=0; i<run_state.threads.length; i++) {
-						if (run_state.threads[i].highlighted)
-							to_unhighlight.add(run_state.threads[i].highlighted);
-					}
-					while(count < slice_loops && run_state.threads.length > 0) {
-						// This will _not_ iterate over newly-added threads.
-						let to_iter = limit_threads !== null ? limit_threads : run_state.threads;
-						to_iter.forEach(thread => tick(thread));
-						count += run_state.threads.length;
-						let dead_threads = run_state.threads.filter(t => !t.running);
-						if (dead_threads.length > 0) {
-							dead_threads.forEach(dead_thread => document.getElementById("threads").removeChild(dead_thread.info_elt));
-						}
-						run_state.threads = run_state.threads.filter(t => t.running);
-					}
-					ticks += count;
-					let to_highlight = new Set();
 					for(let i=0; i<run_state.threads.length; i++) {
 						let state = run_state.threads[i];
 						let cell = document.getElementById("table").children[state.row].children[state.col];
-						to_unhighlight.delete(cell);
-						to_highlight.add(cell);
-						state.highlighted = cell;
+						run_state.threads[i].highlighted = cell;
+						cell.classList.add("active");
+						to_unhighlight.add(cell);
 					}
-					to_unhighlight.forEach(a => a.classList.remove("active"));
-					if (ticks > document.getElementById("max_loops").value)
-						error(run_state, "Ran out of ticks!");
-					if (!run_state.running)
-						break;
-					to_highlight.forEach(a => a.classList.add("active"));
 					run_state.threads.forEach(function (thread) {
 						if (thread.info_elt.children.length == 0) {
 							let button = document.createElement("button");
@@ -541,20 +515,43 @@
 							tr.children[thread.stack.length - idx + 1].innerText = val;
 						});
 					});
-					if (need_sleep) {
+					if (!run_state.paused_event)
 						await sleep(run_state.slice_sleep);
+					if (run_state.paused_event) {
+						let paused_event = run_state.paused_event;
+						run_state.paused_event = null;
+						unpause_data = await paused_event;
+						if (unpause_data.count !== undefined) {
+							need_sleep = false;
+							slice_loops = unpause_data.count;
+						}
+						if (unpause_data.threads !== undefined)
+							limit_threads = unpause_data.threads;
 					}
+					let count = 0;
+					while(count < slice_loops && run_state.threads.length > 0) {
+						// This will _not_ iterate over newly-added threads.
+						let to_iter = limit_threads !== null ? limit_threads : run_state.threads;
+						to_iter.forEach(thread => tick(thread));
+						count += run_state.threads.length;
+						let dead_threads = run_state.threads.filter(t => !t.running);
+						if (dead_threads.length > 0) {
+							dead_threads.forEach(dead_thread => document.getElementById("threads").removeChild(dead_thread.info_elt));
+						}
+						run_state.threads = run_state.threads.filter(t => t.running);
+					}
+					ticks += count;
+					to_unhighlight.forEach(a => a.classList.remove("active"));
+					if (ticks > document.getElementById("max_loops").value)
+						error(run_state, "Ran out of ticks!");
+					if (!run_state.running)
+						break;
 				}
+				running_wake();
 				console.log("exited main_loop with ticks " + ticks);
 			}
 			function tick(state) {
 				state.count += 1;
-				state.col += state.cold;
-				state.row += state.rowd;
-				if (state.row == field.length) state.row = 0;
-				else if (state.row == -1) state.row = field.length - 1;
-				if (state.col == field[0].length) state.col = 0;
-				else if (state.col == -1) state.col = field[0].length - 1;
 				let symbol = field[state.row][state.col];
 				if (state.mode == "normal") {
 					let instruction = instructions[symbol];
@@ -574,6 +571,12 @@
 						state.stack.push(symbol);
 					}
 				}
+				state.col += state.cold;
+				state.row += state.rowd;
+				if (state.row == field.length) state.row = 0;
+				else if (state.row == -1) state.row = field.length - 1;
+				if (state.col == field[0].length) state.col = 0;
+				else if (state.col == -1) state.col = field[0].length - 1;
 			}
 
 			function copydown() {
