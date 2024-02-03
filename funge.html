@@ -234,6 +234,8 @@
 				run_state.threads.forEach(function (thread) {
 					thread.info_elt.children[0].children[0].children[0].children[0].removeAttribute("disabled");
 				});
+				// We shouldn't be in the sleep loop if paused.
+				if (awake_sleep != null) awake_sleep();
 			}
 			function unpause() {
 				let old_wake = run_state.paused_wake;
@@ -278,6 +280,7 @@
 			function stop() {
 				run_state.threads.forEach(function (thread) { thread.running = false; });
 				unpause();
+				if (awake_sleep != null) awake_sleep();
 			}
 
 			function pop(state) {
@@ -454,8 +457,10 @@
 			}
 
 			let field = [];
+			let awake_sleep = null;
 			async function sleep(ms) {
-				await new Promise(r => setTimeout(r, ms));
+				await new Promise(r => { awake_sleep = r; setTimeout(r, ms) });
+				awake_sleep = null;
 			}
 			async function main_loop() {
 				let ticks = 0;
@@ -463,12 +468,15 @@
 				while(run_state.threads.length > 0) {
 					let slice_loops = run_state.slice_loops;
 					let limit_threads = null;
+					let need_sleep = true;
 					if (run_state.paused_event) {
 						let paused_event = run_state.paused_event;
 						run_state.paused_event = null;
 						unpause_data = await paused_event;
-						if (unpause_data.count !== undefined)
+						if (unpause_data.count !== undefined) {
+							need_sleep = false;
 							slice_loops = unpause_data.count;
+						}
 						if (unpause_data.threads !== undefined)
 							limit_threads = unpause_data.threads;
 					}
@@ -533,7 +541,9 @@
 							tr.children[thread.stack.length - idx + 1].innerText = val;
 						});
 					});
-					await sleep(run_state.slice_sleep);
+					if (need_sleep) {
+						await sleep(run_state.slice_sleep);
+					}
 				}
 				console.log("exited main_loop with ticks " + ticks);
 			}
