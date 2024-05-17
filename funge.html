@@ -551,12 +551,13 @@
 							limit_threads = unpause_data.threads;
 					}
 
-					let count = 0;
-					let dead_threads = [];
 					if (ticks > document.getElementById("max_loops").value) {
 						run_state.threads.forEach(function(t) {t.running = false;});
 						error(run_state, "Ran out of ticks!");
 					}
+
+					let count = 0;
+					let dead_threads = [];
 					while(count < slice_loops && run_state.threads.length > 0) {
 						// This will _not_ iterate over newly-added threads.
 						let to_iter = limit_threads !== null ? limit_threads : run_state.threads;
@@ -568,6 +569,7 @@
 							run_state.threads = run_state.threads.filter(t => t.running);
 						}
 					}
+
 					dead_threads.forEach(dead_thread => document.getElementById("threads").removeChild(dead_thread.info_elt));
 					ticks += count;
 				}
