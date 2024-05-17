@@ -277,6 +277,9 @@
 				};
 				return thread;
 			}
+			function split_thread(old_thread) {
+				return new_thread(old_thread.col - old_thread.cold, old_thread.row - old_thread.rowd, -old_thread.cold, -old_thread.rowd, JSON.parse(JSON.stringify(old_thread.stack)));
+			}
 			function setup_thread_gui(thread) {
 				// Called when we first try to execute the thread.
 				let button = document.createElement("button");
@@ -296,9 +299,6 @@
 				thread_info.appendChild(table);
 				document.getElementById("threads").appendChild(thread_info);
 				thread.info_elt = thread_info;
-			}
-			function split_thread(old_thread) {
-				return new_thread(old_thread.col - old_thread.cold, old_thread.row - old_thread.rowd, -old_thread.cold, -old_thread.rowd, JSON.parse(JSON.stringify(old_thread.stack)));
 			}
 			async function go() {
 				stop();
