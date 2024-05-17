@@ -300,6 +300,20 @@
 				document.getElementById("threads").appendChild(thread_info);
 				thread.info_elt = thread_info;
 			}
+			function update_thread_state(thread) {
+				if (thread.info_elt === null) setup_thread_gui(thread);
+				let tr = thread.info_elt.children[0].children[0];
+				tr.children[1].innerText = "(" + ("" + thread.col).padStart(3, "\u00a0") + "," + ("" + thread.row).padStart(3, "\u00a0") + ")";
+				while(tr.children.length > thread.stack.length + 2) {
+					tr.removeChild(tr.children[tr.children.length - 1]);
+				}
+				while(tr.children.length < thread.stack.length + 2) {
+					tr.appendChild(document.createElement("td"));
+				}
+				thread.stack.forEach(function (val, idx) {
+					tr.children[thread.stack.length - idx + 1].innerText = val;
+				});
+			}
 			async function go() {
 				stop();
 				if (run_state.running_promise != null) {
@@ -514,20 +528,7 @@
 						cell.classList.add("active");
 						to_unhighlight.add(cell);
 					}
-					run_state.threads.forEach(function (thread) {
-						if (thread.info_elt === null) setup_thread_gui(thread);
-						let tr = thread.info_elt.children[0].children[0];
-						tr.children[1].innerText = "(" + ("" + thread.col).padStart(3, "\u00a0") + "," + ("" + thread.row).padStart(3, "\u00a0") + ")";
-						while(tr.children.length > thread.stack.length + 2) {
-							tr.removeChild(tr.children[tr.children.length - 1]);
-						}
-						while(tr.children.length < thread.stack.length + 2) {
-							tr.appendChild(document.createElement("td"));
-						}
-						thread.stack.forEach(function (val, idx) {
-							tr.children[thread.stack.length - idx + 1].innerText = val;
-						});
-					});
+					run_state.threads.forEach(update_thread_state);
 					if (!run_state.paused_event)
 						await sleep(run_state.slice_sleep);
 					if (run_state.paused_event) {
