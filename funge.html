@@ -250,6 +250,16 @@
 					old_wake({});
 				}
 			}
+			async function sleep_until_unpaused() {
+				if (!run_state.paused_event)
+					await sleep(run_state.slice_sleep);
+				if (run_state.paused_event) {
+					let paused_event = run_state.paused_event;
+					run_state.paused_event = null;
+					unpause_data = await paused_event;
+					return unpause_data;
+				}
+			}
 			function step(e) {
 				let old_wake = run_state.paused_wake;
 				pause();
@@ -534,12 +544,9 @@
 					});
 					highlighted_cells = new_highlighted_cells;
 					run_state.threads.forEach(update_thread_state);
-					if (!run_state.paused_event)
-						await sleep(run_state.slice_sleep);
-					if (run_state.paused_event) {
-						let paused_event = run_state.paused_event;
-						run_state.paused_event = null;
-						unpause_data = await paused_event;
+
+					let unpause_data = await sleep_until_unpaused();
+					if (unpause_data) {
 						if (unpause_data.count !== undefined) {
 							need_sleep = false;
 							slice_loops = unpause_data.count;
