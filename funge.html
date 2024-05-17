@@ -554,18 +554,21 @@
 						if (unpause_data.threads !== undefined)
 							limit_threads = unpause_data.threads;
 					}
+
 					let count = 0;
+					let dead_threads = [];
 					while(count < slice_loops && run_state.threads.length > 0) {
 						// This will _not_ iterate over newly-added threads.
 						let to_iter = limit_threads !== null ? limit_threads : run_state.threads;
 						to_iter.forEach(thread => tick(thread));
 						count += run_state.threads.length;
-						let dead_threads = run_state.threads.filter(t => !t.running);
-						if (dead_threads.length > 0) {
-							dead_threads.forEach(dead_thread => document.getElementById("threads").removeChild(dead_thread.info_elt));
+						let new_dead_threads = run_state.threads.filter(t => !t.running);
+						if (new_dead_threads) {
+							dead_threads.push(...new_dead_threads);
+							run_state.threads = run_state.threads.filter(t => t.running);
 						}
-						run_state.threads = run_state.threads.filter(t => t.running);
 					}
+					dead_threads.forEach(dead_thread => document.getElementById("threads").removeChild(dead_thread.info_elt));
 					ticks += count;
 					if (ticks > document.getElementById("max_loops").value)
 						error(run_state, "Ran out of ticks!");
