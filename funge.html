@@ -265,9 +265,37 @@
 				}
 			}
 			function new_thread(col, row, cold, rowd) {
+				thread = {
+					"col": col,
+					"row": row,
+					"cold": cold,
+					"rowd": rowd,
+					running: true,
+					mode: "normal",
+					stack: [],
+					info_elt: null,
+				};
+				return thread;
+			}
+			function setup_thread_gui(thread) {
+				// Called when we first try to execute the thread.
+				let button = document.createElement("button");
+				button.setAttribute("disabled", "disabled");
+				const this_thread = thread;
+				button.addEventListener("click", function () { step_thread(this_thread); });
+				button.innerText = "Step";
+				let thb = document.createElement("th");
+				thb.appendChild(button);
+				let table = document.createElement("table");
+				let tr = document.createElement("tr");
+				let th = document.createElement("th");
+				tr.appendChild(thb);
+				tr.appendChild(th);
+				table.appendChild(tr);
 				let thread_info = document.createElement("p");
+				thread_info.appendChild(table);
 				document.getElementById("threads").appendChild(thread_info);
-				return {"col": col, "row": row, "cold": cold, "rowd": rowd, running: true, mode: "normal", stack: [], info_elt: thread_info};
+				thread.info_elt = thread_info;
 			}
 			function split_thread(old_thread) {
 				return new_thread(old_thread.col - old_thread.cold, old_thread.row - old_thread.rowd, -old_thread.cold, -old_thread.rowd, JSON.parse(JSON.stringify(old_thread.stack)));
@@ -487,22 +515,7 @@
 						to_unhighlight.add(cell);
 					}
 					run_state.threads.forEach(function (thread) {
-						if (thread.info_elt.children.length == 0) {
-							let button = document.createElement("button");
-							button.setAttribute("disabled", "disabled");
-							const this_thread = thread;
-							button.addEventListener("click", function () { step_thread(this_thread); });
-							button.innerText = "Step";
-							let thb = document.createElement("th");
-							thb.appendChild(button);
-							let table = document.createElement("table");
-							let tr = document.createElement("tr");
-							let th = document.createElement("th");
-							tr.appendChild(thb);
-							tr.appendChild(th);
-							table.appendChild(tr);
-							thread.info_elt.appendChild(table);
-						}
+						if (thread.info_elt === null) setup_thread_gui(thread);
 						let tr = thread.info_elt.children[0].children[0];
 						tr.children[1].innerText = "(" + ("" + thread.col).padStart(3, "\u00a0") + "," + ("" + thread.row).padStart(3, "\u00a0") + ")";
 						while(tr.children.length > thread.stack.length + 2) {
