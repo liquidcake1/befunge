@@ -323,6 +323,9 @@
 				thread.stack.forEach(function (val, idx) {
 					tr.children[thread.stack.length - idx + 1].innerText = val;
 				});
+				let cell = document.getElementById("table").children[thread.row].children[thread.col];
+				thread.highlighted = cell;
+				cell.classList.add("active");
 			}
 			async function go() {
 				stop();
@@ -526,24 +529,17 @@
 				run_state.running = true;
 				let running_wake = null;
 				run_state.running_promise = new Promise(r => { running_wake = r; });
-				let highlighted_cells = new Set();
+				let highlighted_cells = [];
 				while(run_state.threads.length > 0) {
 					let slice_loops = run_state.slice_loops;
 					let limit_threads = null;
 					let need_sleep = true;
-					let new_highlighted_cells = new Set();
-					for(let i=0; i<run_state.threads.length; i++) {
-						let state = run_state.threads[i];
-						let cell = document.getElementById("table").children[state.row].children[state.col];
-						run_state.threads[i].highlighted = cell;
-						cell.classList.add("active");
-						new_highlighted_cells.add(cell);
-					}
-					highlighted_cells.forEach(function(cell) {
-						if (!new_highlighted_cells.has(cell)) {cell.classList.remove("active");}
-					});
-					highlighted_cells = new_highlighted_cells;
+
 					run_state.threads.forEach(update_thread_state);
+					let new_highlighted_cells = run_state.threads.map(t => t.highlighted);
+					highlighted_cells.filter(x => !new_highlighted_cells.includes(x)).forEach(
+						cell => cell.classList.remove("active"));
+					highlighted_cells = new_highlighted_cells;
 
 					let unpause_data = await sleep_until_unpaused();
 					if (unpause_data) {
