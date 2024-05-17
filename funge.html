@@ -557,6 +557,10 @@
 
 					let count = 0;
 					let dead_threads = [];
+					if (ticks > document.getElementById("max_loops").value) {
+						run_state.threads.forEach(function(t) {t.running = false;});
+						error(run_state, "Ran out of ticks!");
+					}
 					while(count < slice_loops && run_state.threads.length > 0) {
 						// This will _not_ iterate over newly-added threads.
 						let to_iter = limit_threads !== null ? limit_threads : run_state.threads;
@@ -570,10 +574,6 @@
 					}
 					dead_threads.forEach(dead_thread => document.getElementById("threads").removeChild(dead_thread.info_elt));
 					ticks += count;
-					if (ticks > document.getElementById("max_loops").value)
-						error(run_state, "Ran out of ticks!");
-					if (!run_state.running)
-						break;
 				}
 				highlighted_cells.forEach(cell => cell.classList.remove("active"));
 				running_wake();
