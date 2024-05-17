@@ -514,6 +514,9 @@
 			}
 			function error(state, message) {
 				state.running = false;
+				output_error(state, message);
+			}
+			function output_error(state, message) {
 				oute("ERROR: " + message);
 				oute("State was: " + JSON.stringify(state));
 			}
@@ -541,19 +544,21 @@
 						cell => cell.classList.remove("active"));
 					highlighted_cells = new_highlighted_cells;
 
+					if (ticks > document.getElementById("max_loops").value) {
+						oute("Ran out of ticks! (" + ticks + " > " + document.getElementById("max_loops").value + ")");
+						pause();
+					}
+
 					let unpause_data = await sleep_until_unpaused();
 					if (unpause_data) {
+						console.log("Unpaused; resetting ticks to 0 from " + ticks);
+						ticks = 0;
 						if (unpause_data.count !== undefined) {
 							need_sleep = false;
 							slice_loops = unpause_data.count;
 						}
 						if (unpause_data.threads !== undefined)
 							limit_threads = unpause_data.threads;
-					}
-
-					if (ticks > document.getElementById("max_loops").value) {
-						run_state.threads.forEach(function(t) {t.running = false;});
-						error(run_state, "Ran out of ticks!");
 					}
 
 					let count = 0;
