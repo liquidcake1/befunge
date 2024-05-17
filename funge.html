@@ -516,18 +516,23 @@
 				run_state.running = true;
 				let running_wake = null;
 				run_state.running_promise = new Promise(r => { running_wake = r; });
+				let highlighted_cells = new Set();
 				while(run_state.threads.length > 0) {
 					let slice_loops = run_state.slice_loops;
 					let limit_threads = null;
 					let need_sleep = true;
-					let to_unhighlight = new Set();
+					let new_highlighted_cells = new Set();
 					for(let i=0; i<run_state.threads.length; i++) {
 						let state = run_state.threads[i];
 						let cell = document.getElementById("table").children[state.row].children[state.col];
 						run_state.threads[i].highlighted = cell;
 						cell.classList.add("active");
-						to_unhighlight.add(cell);
+						new_highlighted_cells.add(cell);
 					}
+					highlighted_cells.forEach(function(cell) {
+						if (!new_highlighted_cells.has(cell)) {cell.classList.remove("active");}
+					});
+					highlighted_cells = new_highlighted_cells;
 					run_state.threads.forEach(update_thread_state);
 					if (!run_state.paused_event)
 						await sleep(run_state.slice_sleep);
@@ -555,12 +560,12 @@
 						run_state.threads = run_state.threads.filter(t => t.running);
 					}
 					ticks += count;
-					to_unhighlight.forEach(a => a.classList.remove("active"));
 					if (ticks > document.getElementById("max_loops").value)
 						error(run_state, "Ran out of ticks!");
 					if (!run_state.running)
 						break;
 				}
+				highlighted_cells.forEach(cell => cell.classList.remove("active"));
 				running_wake();
 				console.log("exited main_loop with ticks " + ticks);
 			}
