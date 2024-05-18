@@ -470,7 +470,7 @@
 				},
 				"p": {
 					impl: function (state) { let row = pop(state); var col = pop(state); var val = pop(state); set_field(state, col, row, val); },
-					desc: "val row col → (); field[row][col] = val",
+					desc: "val col row → (); field[row][col] = val",
 				},
 				"t": {
 					impl: function (state) { run_state.threads.push(split_thread(state)); },
