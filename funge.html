@@ -384,6 +384,22 @@
 				if (instructions_raw[val_str] !== undefined)
 					title += ": " + instructions_raw[val_str].desc;
 				document.getElementById("table").children[row].children[col].title = title;
+				let dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+				for(let i=0; i<4; i++) {
+					let rowd = dirs[i][0];
+					let cold = dirs[i][1];
+					let cell_diagonal_index = diagonalise_with_dir(row, col, rowd, cold);
+					let cell_stats = stats[cell_diagonal_index];
+					if (cell_stats) {
+						console.log(`clearing jit at ${row} ${col} ${rowd} ${cold}`);
+						for(let j=0; j<cell_stats.jit_starts.length; j++) {
+							console.log(`clearing jit at ${cell_stats.jit_starts[j]}`);
+							stats[cell_stats.jit_starts[j]] = undefined;
+						}
+					} else {
+						console.log(`Not clearing jit at ${row} ${col} ${rowd} ${cold}`);
+					}
+				}
 			}
 			function get_field(state, col, row, val) {
 				if (check(state, col, row)) {
@@ -723,7 +739,7 @@
 					if (cell_stats) {
 						if (cell_stats.jit) {
 							let jit = cell_stats.jit;
-							if (jit.count <= target_ticks) {
+							if (jit.count <= target_ticks && state.stack.length >= jit.stack_req) {
 								state.row = jit.end_row;
 								state.col = jit.end_col;
 								state.rowd = jit.end_rowd;
@@ -751,7 +767,7 @@
 							}
 						}
 					} else {
-						stats[diagonal_index] = {"count": 1};
+						stats[diagonal_index] = {"count": 1, jit_starts: []};
 					}
 				} else if (state.jit.mode == "follow") {
 					if (state.row == state.jit.path[0][0] && state.col == state.jit.path[0][1] && state.rowd == state.jit.path[0][2] && state.cold == state.jit.path[0][3]) {
@@ -814,6 +830,11 @@
 						eval(code);
 						let starting_place = state.jit.path[0];
 						let diagonal_index = diagonalise_with_dir(...starting_place);
+						for(let i=0; i<state.jit.path.length; i++) {
+							let cell_diagonal_index = diagonalise_with_dir(...state.jit.path[i]);
+							stats[cell_diagonal_index] ||= {count: 0, jit_starts: []};
+							stats[cell_diagonal_index].jit_starts.push(diagonal_index);
+						}
 						stats[diagonal_index].jit = jit;
 					} else {
 						console.log(`Abandoning empty JIT attempt`);
