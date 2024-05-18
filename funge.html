@@ -533,6 +533,7 @@
 				let running_wake = null;
 				run_state.running_promise = new Promise(r => { running_wake = r; });
 				let highlighted_cells = [];
+				let start_time = new Date().getTime();
 				while(run_state.threads.length > 0) {
 					let slice_loops = run_state.slice_loops;
 					let limit_threads = null;
@@ -545,7 +546,9 @@
 					highlighted_cells = new_highlighted_cells;
 
 					if (ticks > document.getElementById("max_loops").value) {
+						let end_time = new Date().getTime();
 						oute("Ran out of ticks! (" + ticks + " > " + document.getElementById("max_loops").value + ")");
+						console.log(`${ticks} in ${end_time - start_time} is ${ticks / (end_time - start_time) / 1000} MHz`);
 						pause();
 					}
 
@@ -553,6 +556,7 @@
 					if (unpause_data) {
 						console.log("Unpaused; resetting ticks to 0 from " + ticks);
 						ticks = 0;
+						start_time = new Date().getTime();
 						if (unpause_data.count !== undefined) {
 							need_sleep = false;
 							slice_loops = unpause_data.count;
