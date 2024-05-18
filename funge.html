@@ -575,7 +575,8 @@
 						}
 					}
 
-					dead_threads.forEach(dead_thread => document.getElementById("threads").removeChild(dead_thread.info_elt));
+					dead_threads.filter(x => x.info_elt).forEach(
+						dead_thread => document.getElementById("threads").removeChild(dead_thread.info_elt));
 					ticks += count;
 				}
 				highlighted_cells.forEach(cell => cell.classList.remove("active"));
