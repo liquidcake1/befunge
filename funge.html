@@ -98,7 +98,7 @@
 					return;
 				}
 				if (key.length != 1 && !key.startsWith("Arrow")) {
-					console.log("Key " + key + " has weird length; keyCode is " + e.keyCode);
+					console.log(`Key ${key} has weird length; keyCode is ${e.keyCode}`);
 					return;
 				}
 				if (editing.state) {
@@ -324,7 +324,7 @@
 			function update_thread_state(thread) {
 				if (thread.info_elt === null) setup_thread_gui(thread);
 				let tr = thread.info_elt.children[0].children[0];
-				tr.children[1].innerText = "(" + ("" + thread.col).padStart(3, "\u00a0") + "," + ("" + thread.row).padStart(3, "\u00a0") + ")";
+				tr.children[1].innerText = `(${("" + thread.col).padStart(3, "\u00a0")},${("" + thread.row).padStart(3, "\u00a0")})`;
 				while(tr.children.length > thread.stack.length + 2) {
 					tr.removeChild(tr.children[tr.children.length - 1]);
 				}
@@ -365,22 +365,22 @@
 				}
 			}
 			function check(state, row, col) {
-				if (row < 0 || row >= height) error(state, "Row " + row + " is out of bounds");
-				else if (col < 0 || col >= height) error(state, "Col " + col + " is out of bounds");
+				if (row < 0 || row >= height) error(state, `Row ${row} is out of bounds`);
+				else if (col < 0 || col >= height) error(state, `Col ${col} is out of bounds`);
 				else return true;
 			}
 			function set_field(state, col, row, val) {
 				if (check(state, col, row)) {
 					set_cell(document.getElementById("table").children[row].children[col], col, row, val);
 				} else {
-					console.log("out of bounds access " + state + " " + col + " " + row + " " + val);
+					console.log(`out of bounds access ${state} ${col} ${row} ${val}`);
 				}
 			}
 			function set_cell(cell, col, row, val) {
 				let val_str = String.fromCharCode(val);
 				field[row][col] = val;
 				document.getElementById("table").children[row].children[col].innerText = val_str == " " ? "\u00a0" : val_str;
-				let title = "(" + col + "," + row + ")=" + val + " (" + val_str + ")";
+				let title = `(${col},${row})=${val} (${val_str})`;
 				if (instructions_raw[val_str] !== undefined)
 					title += ": " + instructions_raw[val_str].desc;
 				document.getElementById("table").children[row].children[col].title = title;
@@ -582,13 +582,13 @@
 			};
 			for(let i=0; i<10; i++) {
 				const j = i; // Prevent any capture shenanigans.
-				instructions_raw["" + i] = {
+				instructions_raw[i] = {
 					impl: function (state) { state.stack.push(j); },
-					desc: "() → " + i,
+					desc: `() → ${i}`,
 					can_jit: true,
 					jit_pop: 0,
 					jit_push: 1,
-					jit_code: "stack.push(" + i + ");",
+					jit_code: `stack.push(${i});`,
 				};
 			}
 			// Fast access instructions array.
@@ -614,8 +614,8 @@
 				output_error(state, message);
 			}
 			function output_error(state, message) {
-				oute("ERROR: " + message);
-				oute("State was: " + JSON.stringify(state));
+				oute(`ERROR: ${message}`);
+				oute(`State was: ${JSON.stringify(state)}`);
 			}
 
 			let field = [];
@@ -644,14 +644,14 @@
 
 					if (ticks > document.getElementById("max_loops").value) {
 						let end_time = new Date().getTime();
-						oute("Ran out of ticks! (" + ticks + " > " + document.getElementById("max_loops").value + ")");
+						oute(`Ran out of ticks! (${ticks} > ${document.getElementById("max_loops").value})`);
 						console.log(`${ticks} in ${end_time - start_time} is ${ticks / (end_time - start_time) / 1000} MHz`);
 						pause();
 					}
 
 					let unpause_data = await sleep_until_unpaused();
 					if (unpause_data) {
-						console.log("Unpaused; resetting ticks to 0 from " + ticks);
+						console.log(`Unpaused; resetting ticks to 0 from ${ticks}`);
 						ticks = 0;
 						start_time = new Date().getTime();
 						if (unpause_data.count !== undefined) {
@@ -681,7 +681,7 @@
 				}
 				highlighted_cells.forEach(cell => cell.classList.remove("active"));
 				running_wake();
-				console.log("exited main_loop with ticks " + ticks);
+				console.log(`exited main_loop with ticks ${ticks}`);
 			}
 			function diagonalise_positive(row, col) {
 				/*
@@ -731,7 +731,7 @@
 								try {
 									jit.call(state);
 								} catch (err) {
-									error(state, "Exception caught: " + err.message);
+									error(state, `Exception caught: ${err.message}`);
 								}
 								state.count += jit.count;
 								return jit.count;
@@ -739,7 +739,7 @@
 						} else if (state.mode == "normal") {
 							cell_stats.count += 1;
 							if (cell_stats.count == 10) {
-								console.log("loop found at " + diagonal_index + "?");
+								console.log(`loop found at ${diagonal_index}?`);
 								state.jit = {
 									mode: "follow",
 									path: [[state.row, state.col, state.rowd, state.cold]],
