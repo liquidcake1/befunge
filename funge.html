@@ -573,7 +573,22 @@
 					can_jit: true,
 					jit_pop: 3,
 					jit_push: 0,
-					jit_code: "{let row = stack.pop(); set_field(state, stack.pop(), row, stack.pop());}",
+					jit_code: function (thread_state) {
+						return `
+					{
+						let row = stack.pop();
+						let col = stack.pop();
+						set_field(state, col, row, stack.pop());
+						for (let i=0; i<jit.path.length; i++) {
+							if (jit.path[i][0] == row && jit.path[i][1] == col) {
+								state.row = ${thread_state.row} + ${thread_state.rowd};
+								state.col = ${thread_state.col} + ${thread_state.cold};
+								state.rowd = ${thread_state.rowd};
+								state.cold = ${thread_state.cold};
+								return;
+							}
+						}
+					}`},
 				},
 				"t": {
 					impl: function (state) { run_state.threads.push(split_thread(state)); },
@@ -745,7 +760,7 @@
 								state.rowd = jit.end_rowd;
 								state.cold = jit.end_cold;
 								try {
-									jit.call(state);
+									jit.call(jit, state);
 								} catch (err) {
 									error(state, `Exception caught: ${err.message}`);
 								}
@@ -785,7 +800,11 @@
 						raw_instruction = instructions_raw[String.fromCharCode(symbol)];
 						if (raw_instruction.can_jit) {
 							state.jit.code += `// ${String.fromCharCode(symbol)} at row ${state.row}, col ${state.col}, heading ${state.rowd}, ${state.cold}\n`;
-							state.jit.code += `${raw_instruction.jit_code}\n`;
+							let real_code = raw_instruction.jit_code;
+							if (typeof real_code == 'function') {
+								real_code = real_code(state);
+							}
+							state.jit.code += `${real_code}\n`;
 							state.jit.stack_req = Math.max(state.jit.stack_req, state.jit.stack_delta - raw_instruction.jit_pop);
 							state.jit.stack_delta += raw_instruction.jit_push - raw_instruction.jit_pop;
 						} else {
@@ -814,7 +833,7 @@
 					if (state.jit.count > 0) {
 						console.log("Loop found");
 						console.log(state.jit.path);
-						let code=`jit.call=function (state) {\nlet stack = state.stack;\n${state.jit.code}\n}`;
+						let code=`jit.call=function (jit, state) {\nlet stack = state.stack;\n${state.jit.code}\n}`;
 						console.log(code);
 						let resting_place = state.jit.path[state.jit.path.length - 1];
 						let jit = {
@@ -823,6 +842,7 @@
 							end_rowd: resting_place[2],
 							end_cold: resting_place[3],
 							count: state.jit.count,
+							path: state.jit.path,
 							stack_req: state.jit.stack_req,
 							code: code,
 						};
