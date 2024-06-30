@@ -284,8 +284,8 @@
 					old_wake({threads: [thread], count: 1});
 				}
 			}
-			function new_thread(col, row, cold, rowd) {
-				thread = {
+			function new_thread(col, row, cold, rowd, stack) {
+				let thread = {
 					"col": col,
 					"row": row,
 					"cold": cold,
@@ -293,7 +293,7 @@
 					running: true,
 					mode: "normal",
 					jit: null,
-					stack: [],
+					stack: stack,
 					info_elt: null,
 				};
 				return thread;
