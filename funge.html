@@ -295,11 +295,14 @@
 					jit: null,
 					stack: stack,
 					info_elt: null,
+					tick_count: 0,
 				};
 				return thread;
 			}
 			function split_thread(old_thread) {
-				return new_thread(old_thread.col - old_thread.cold, old_thread.row - old_thread.rowd, -old_thread.cold, -old_thread.rowd, JSON.parse(JSON.stringify(old_thread.stack)));
+				let thread = new_thread(old_thread.col - old_thread.cold, old_thread.row - old_thread.rowd, -old_thread.cold, -old_thread.rowd, JSON.parse(JSON.stringify(old_thread.stack)));
+				thread.tick_count = old_thread.tick_count; // Ensure new thread has equal priority to old thread.
+				return thread;
 			}
 			function setup_thread_gui(thread) {
 				// Called when we first try to execute the thread.
@@ -698,7 +701,14 @@
 					while(count < slice_loops && run_state.threads.length > 0) {
 						// This will _not_ iterate over newly-added threads.
 						let to_iter = limit_threads !== null ? limit_threads : run_state.threads;
-						to_iter.forEach(thread => { count += tick(thread, slice_loops - count); });
+						let min_count = Math.min(...to_iter.map(x => x.tick_count));
+						to_iter.forEach(thread => {
+							if (thread.tick_count == min_count) {
+								let tick_count = tick(thread, slice_loops - count);
+								count += tick_count;
+								thread.tick_count += tick_count;
+							}
+						});
 						let new_dead_threads = run_state.threads.filter(t => !t.running);
 						if (new_dead_threads) {
 							dead_threads.push(...new_dead_threads);
