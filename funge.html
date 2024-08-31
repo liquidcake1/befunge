@@ -284,7 +284,7 @@
 					old_wake({threads: [thread], count: 1});
 				}
 			}
-			function new_thread(col, row, cold, rowd, stack) {
+			function new_thread(col, row, cold, rowd, stack, overlays) {
 				let thread = {
 					"col": col,
 					"row": row,
@@ -296,11 +296,19 @@
 					stack: stack,
 					info_elt: null,
 					tick_count: 0,
+					overlays: overlays || {},
 				};
 				return thread;
 			}
 			function split_thread(old_thread) {
-				let thread = new_thread(old_thread.col - old_thread.cold, old_thread.row - old_thread.rowd, -old_thread.cold, -old_thread.rowd, JSON.parse(JSON.stringify(old_thread.stack)));
+				let thread = new_thread(
+					old_thread.col - old_thread.cold,
+					old_thread.row - old_thread.rowd,
+					-old_thread.cold,
+					-old_thread.rowd,
+					JSON.parse(JSON.stringify(old_thread.stack)),
+					JSON.parse(JSON.stringify(old_thread.overlays)),
+				);
 				thread.tick_count = old_thread.tick_count; // Ensure new thread has equal priority to old thread.
 				return thread;
 			}
@@ -335,6 +343,9 @@
 					tr.appendChild(document.createElement("td"));
 				}
 				thread.stack.forEach(function (val, idx) {
+					if (val > 32 && val < 127) {
+						val = String.fromCharCode(val);
+					}
 					tr.children[thread.stack.length - idx + 1].innerText = val;
 				});
 				let cell = document.getElementById("table").children[thread.row].children[thread.col];
@@ -400,7 +411,7 @@
 							stats[cell_stats.jit_starts[j]] = undefined;
 						}
 					} else {
-						console.log(`Not clearing jit at ${row} ${col} ${rowd} ${cold}`);
+						//console.log(`Not clearing jit at ${row} ${col} ${rowd} ${cold}`);
 					}
 				}
 			}
@@ -613,6 +624,150 @@
 					jit_push: 0,
 					jit_code: "",
 				},
+				"(": {
+					impl: function (state) {
+						const n = pop(state);
+						let x = 0;
+						for(let i=0; i<n; i++) {
+							x = x * 256 + pop(state);
+						}
+						if (overlays[x]) {
+							// We don't support ")" anyway so for now don't
+							// need to know how to undo...
+							for(let [k, v] of Object.entries(overlays[x])) {
+								state.overlays[k.charCodeAt(0)] = v.impl;
+							}
+							state.stack.push(x);
+							state.stack.push(1);
+						} else {
+							// Failure, reverse direction.
+							thread.cold *= -1;
+							thread.rowd *= -1;
+						}
+					},
+					desc: "xn ... x1 n → f=(x1 + x2*256 + ... + xn*256^(n-1)) 1 | (); load semantic f or reverse",
+					can_jit: false, // Varargs approach makes JIT hard!
+				},
+			};
+			function gen_fingerprint(s) {
+				let x = 0;
+				for(let c of Array.from(s).map(x => x.charCodeAt(0))) {
+					x = x * 256 + c;
+				}
+				return x;
+			}
+			var overlays = {};
+			overlays[gen_fingerprint("WS")] = {
+				"C": {
+					impl: function (state) {
+						let n = pop(state);
+						let url = "";
+						for(let i=0; i<n; i++) {
+							url += String.fromCharCode(pop(state));
+						}
+						console.log(url);
+						const socket = new WebSocket(url);
+						socket.messages = [];
+						socket.addEventListener("message", function (m) { socket.messages.push(m.data); });
+						state.waiter = function (state) {
+							console.log("Waiter: " + socket);
+							console.log("readyState: " + socket.readyState);
+							if (socket.readyState == 1) {
+								state.stack.push(socket);
+								state.waiter = null;
+								return true;
+							} else if (socket.readyState == 0) {
+								// TODO don't busy-wait this; use open/close -> state.resolve()
+								return false;
+							} else {
+								// Conection failed!
+								state.cold *= -1;
+								state.rowd *= -1;
+								state.col += state.cold * 2;
+								state.row += state.rowd * 2;
+								return true;
+							}
+						};
+					},
+					desc: "xn ... x1 n → SOCKET | (); connect to websocket x1 .. xn (blocking) or reverse",
+					can_jit: false,
+				},
+				"S": {
+					impl: function (state) {
+						let socket = pop(state);
+						console.log(socket);
+						let n = pop(state);
+						message = "";
+						for(let i=0; i<n; i++) {
+							message += String.fromCharCode(pop(state));
+						}
+						console.log(socket.readyState);
+						if (socket.readyState == 1) {
+							socket.send(message);
+						} else {
+							state.cold *= -1;
+							state.rowd *= -1;
+						}
+					},
+					desc: "xn ... x1 n SOCKET → (); send message to websocket or reverse if disconnected",
+					can_jit: false,
+				},
+				"R": {
+					impl: function (state) {
+						let socket = pop(state);
+						state.waiter = function (state) {
+							if (socket.messages.length > 0) {
+								let message = socket.messages.shift();
+								for(let c of message) {
+									state.stack.push(c.charCodeAt(0));
+								}
+								state.stack.push(message.length);
+								return true;
+							} else if (socket.readyState != 1) {
+								state.cold *= -1;
+								state.rowd *= -1;
+								return true;
+							} else {
+								return false;
+							}
+						};
+					},
+					desc: "SOCKET → xn ... x1 n; receive message from websocket (blocking) or reverse if disconnected",
+					can_jit: false,
+				},
+				"D": {
+					impl: function (state) {
+						pop(state).close();
+					},
+					desc: "SOCKET → (); disconnect from websocket",
+					can_jit: false,
+				},
+			};
+			overlays[gen_fingerprint("S")] = {
+				"B": {
+					impl: function (state) {
+						let count = pop(state);
+						let topush = 0;
+						if (state.stack.length >= count) {
+							topush = state.stack.splice(-count, 1)[0];
+						}
+						state.stack.push(topush);
+					},
+					desc: "y xn ... x1 n-1 → xn ... x1 y",
+					can_jit: false,
+				},
+				"F": {
+					impl: function (state) {
+						let count = pop(state);
+						while(state.stack.length < count) {
+							state.stack.splice(0, 0, 0);
+						}
+						let topush = pop(state);
+						state.stack.splice(-count + 1, 0, topush);
+					},
+					desc: "xn ... x1 y n-1 → y xn ... x1",
+					can_jit: false,
+				},
 			};
 			for(let i=0; i<10; i++) {
 				const j = i; // Prevent any capture shenanigans.
@@ -761,6 +916,12 @@
 				if (!state.jit) {
 					let diagonal_index = diagonalise_with_dir(state.row, state.col, state.rowd, state.cold);
 					let cell_stats = stats[diagonal_index];
+					if (state.waiter) {
+						if (state.waiter(state)) {
+							state.waiter = null;
+						}
+						return 1;
+					}
 					if (cell_stats) {
 						if (cell_stats.jit) {
 							let jit = cell_stats.jit;
@@ -772,7 +933,7 @@
 								try {
 									jit.call(jit, state);
 								} catch (err) {
-									error(state, `Exception caught: ${err.message}`);
+									error(state, `Exception caught in jit: ${err.message}`);
 								}
 								state.count += jit.count;
 								return jit.count;
@@ -805,7 +966,7 @@
 				state.count += 1;
 				let symbol = field[state.row][state.col];
 				if (state.mode == "normal") {
-					let instruction = instructions[symbol];
+					let instruction = state.overlays[symbol] || instructions[symbol];
 					if (state.jit && state.jit.mode == "follow") {
 						raw_instruction = instructions_raw[String.fromCharCode(symbol)];
 						if (raw_instruction.can_jit) {
@@ -830,6 +991,7 @@
 							instruction(state);
 						} catch (err) {
 							error(state, "Exception caught: " + err.message);
+							console.log(err.stack);
 						}
 					}
 				} else if (state.mode == "string") {
@@ -953,6 +1115,24 @@
 				document.getElementById("area").value = lines.join("\n");
 				append_save();
 			}
+			async function load_wasm() {
+				let wasm_string = "AGFzbQEAAAABBwFgAn9/AX8DAgEABwoBBmFkZFR3bwAACgkBBwAgACABagsACgRuYW1lAgMBAAA=";
+				let wasm_array = new TextEncoder().encode(atob(wasm_string))
+				const importObject = {
+					my_namespace: {
+						imported_func: arg => {
+							console.log(arg);
+						}
+					}
+				};
+				await WebAssembly.compile(wasm_array).then((mod) =>
+					WebAssembly.instantiate(mod, importObject).then(instance1 => {
+						instance = instance1;
+					})
+				);
+				console.log(instance);
+			}
+			load_wasm();
 		</script>
 <style>
 table { border: black solid 1px; padding: 0px; }
