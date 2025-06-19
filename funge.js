@@ -809,8 +809,8 @@ function tick(state, target_ticks, thread_num) {
 	state.row += state.rowd;
 	if (state.row == field.length) state.row = 0;
 	else if (state.row == -1) state.row = field.length - 1;
-	if (state.col == field[0].length) state.col = 0;
-	else if (state.col == -1) state.col = field[0].length - 1;
+	if (state.col == field[state.row].length) state.col = 0;
+	else if (state.col == -1) state.col = field[state.row].length - 1;
 	return 1;
 }
 
