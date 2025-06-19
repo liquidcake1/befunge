@@ -9,15 +9,14 @@
 //   If the thread self-modified, we'll need a means to abort the JITted sequence early.
 // * There is no JIT visualisation.
 
-let field = [
-	[" ".charCodeAt(0), '9'.charCodeAt(0), "9".charCodeAt(0), '9'.charCodeAt(0), "9".charCodeAt(0), "v".charCodeAt(0), " ".charCodeAt(0)],
-	[",".charCodeAt(0), "+".charCodeAt(0), "+".charCodeAt(0), "+".charCodeAt(0), "9".charCodeAt(0), "<".charCodeAt(0), "@".charCodeAt(0)],
-];
-
 let file_name = process.argv[2];
-let field_s = require("fs").readFileSync(file_name);
+let field_s = require("fs").readFileSync(file_name, "utf8");
 console.log(field_s);
 
+let field = field_s.split("\n");
+field.pop();
+field = field.map( x => x.split("").map( c => c.charCodeAt(0) ) );
+console.log(field);
 
 let run_state = {
 	max_loops: 1000,
