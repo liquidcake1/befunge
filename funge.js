@@ -9,6 +9,16 @@
 //   If the thread self-modified, we'll need a means to abort the JITted sequence early.
 // * There is no JIT visualisation.
 
+let field = [
+	[" ".charCodeAt(0), '9'.charCodeAt(0), "9".charCodeAt(0), '9'.charCodeAt(0), "9".charCodeAt(0), "v".charCodeAt(0), " ".charCodeAt(0)],
+	[",".charCodeAt(0), "+".charCodeAt(0), "+".charCodeAt(0), "+".charCodeAt(0), "9".charCodeAt(0), "<".charCodeAt(0), "@".charCodeAt(0)],
+];
+
+let file_name = process.argv[2];
+let field_s = require("fs").readFileSync(file_name);
+console.log(field_s);
+
+
 let run_state = {
 	max_loops: 1000,
 	paused_wake: null,
@@ -33,6 +43,7 @@ function set_speed(raw_speed) {
 		run_state.slice_loops = 1;
 	}
 }
+
 function toggle_pause(e) {
 	if (run_state.paused_wake === null) {
 		pause();
@@ -570,10 +581,6 @@ function output_error(state, message) {
 	oute(`State was: ${JSON.stringify(state)}`);
 }
 
-let field = [
-	[" ".charCodeAt(0), '"'.charCodeAt(0), "H".charCodeAt(0), '"'.charCodeAt(0), "v".charCodeAt(0)],
-	[32, "@".charCodeAt(0), 32, ",".charCodeAt(0), "<".charCodeAt(0)],
-];
 let awake_sleep = null;
 async function sleep(ms) {
 	await new Promise(r => { awake_sleep = r; setTimeout(r, ms) });
