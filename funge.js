@@ -403,6 +403,37 @@ for(let [s, val] of Object.entries(instructions_raw)) {
   instructions[s.charCodeAt(0)] = val.impl;
 }
 
+class Queue {
+  /* Structure is a (hopefully short) list of (longer) lists.
+   * Queue to the last list.
+   * Hold index into first list.
+   */
+  length = 0;
+  index = -1;
+  content = [[]];
+  max_len = 100;
+  push(x) {
+    let content = this.content;
+    if (content[content.length - 1].length > this.max_len) {
+      content.push([]);
+    }
+    content[content.length - 1].push(x);
+    this.length += 1;
+  }
+  pop() {
+    this.index += 1;
+    if (this.index >= this.content[0].length) {
+      if (this.content.length == 1) {
+        throw("empty");
+      }
+      this.content.shift();
+      this.index = 0;
+    }
+    this.length -= 1;
+    return this.content[0][this.index];
+  }
+}
+
 class Interpreter {
   max_loops = 1000;
   paused_wake = null;
@@ -414,6 +445,7 @@ class Interpreter {
   events = {};
   awake_sleep = null;
   stats = [];
+  input_queue = new Queue(); // Queue things like: change speed, input, etc.
 
   trigger_event(event_name, ...args) {
     console.log(`Event: ${event_name} -- ${JSON.stringify(args, null, null)}`);
@@ -522,12 +554,18 @@ class Interpreter {
       await this.running_promise;
       console.log("Last thread has exited");
     }
+    if (this.threads.length > 0) {
+      this.trigger_event("started");
+    }
     let thread = this.new_thread(0, 0, 1, 0, []);
     this.threads.push(thread);
     this.main_loop();
   }
 
   stop() {
+    if (this.threads.length > 0) {
+      this.trigger_event("stopped");
+    }
     this.threads.forEach(function (thread) { thread.running = false; });
     this.unpause();
     if (this.awake_sleep != null) this.awake_sleep();
@@ -608,6 +646,16 @@ class Interpreter {
     let highlighted_cells = [];
     let start_time = new Date().getTime();
     while(this.threads.length > 0) {
+      while (this.input_queue.length > 0) {
+        let item = this.input_queue.pop();
+        if (item[0] == "set_speed") {
+          this.set_speed(item[1]);
+        } else if (item[0] == "pause") {
+          this.pause();
+        } else if (item[0] == "unpause") {
+          this.unpause();
+        }
+      }
       let slice_loops = this.slice_loops;
       let limit_threads = null;
       let need_sleep = true;
@@ -878,4 +926,7 @@ class Interpreter {
 var instance;
 let interpreter = new Interpreter();
 interpreter.load_wasm();
+interpreter.input_queue.push(["set_speed", -50]);
+// interpreter.input_queue.push(["pause"]);
+// interpreter.input_queue.push(["unpause"]); // TODO BROKEN
 interpreter.go();
