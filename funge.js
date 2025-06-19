@@ -861,5 +861,5 @@ async function load_wasm() {
 	);
 	console.log(instance);
 }
-//load_wasm();
+load_wasm();
 go();
