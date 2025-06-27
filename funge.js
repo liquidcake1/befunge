@@ -42,88 +42,88 @@ let instructions_raw = {
     //impl: function (state) { state.stack.push(-pop(state) + pop(state)); },
     desc: "b a → b + a",
     can_jit: true,
-    jit_pop: 2,
-    jit_push: 1,
-    jit_code: "stack[stack.length - 2] += stack.pop();",
+    stack_min: 2,
+    stack_return: 1,
+    unchecked_js_code: "stack[stack.length - 2] += stack.pop();",
   },
   "-": {
     impl: function (state) { state.stack.push(-pop(state) + pop(state)); },
     desc: "b a → b - a",
     can_jit: true,
-    jit_pop: 2,
-    jit_push: 1,
-    jit_code: "stack[stack.length - 2] -= stack.pop();",
+    stack_min: 2,
+    stack_return: 1,
+    unchecked_js_code: "stack[stack.length - 2] -= stack.pop();",
   },
   "*": {
     impl: function (state) { state.stack.push(pop(state) * pop(state)); },
     desc: "b a → b * a",
     can_jit: true,
-    jit_pop: 2,
-    jit_push: 1,
-    jit_code: "stack[stack.length - 2] *= stack.pop();",
+    stack_min: 2,
+    stack_return: 1,
+    unchecked_js_code: "stack[stack.length - 2] *= stack.pop();",
   },
   "/": {
     impl: function (state) { let a = pop(state); let b = pop(state); state.stack.push(Math.floor(b / a)); },
     desc: "b a → b // a",
     can_jit: true,
-    jit_pop: 2,
-    jit_push: 1,
-    jit_code: "stack[stack.length - 2] /= stack.pop();",
+    stack_min: 2,
+    stack_return: 1,
+    unchecked_js_code: "stack[stack.length - 2] /= stack.pop();",
   },
   "%": {
     impl: function (state) { let a = pop(state); let b = pop(state); state.stack.push(b % a); },
     desc: "b a → b % a",
     can_jit: true,
-    jit_pop: 2,
-    jit_push: 1,
-    jit_code: "stack[stack.length - 2] %= stack.pop();",
+    stack_min: 2,
+    stack_return: 1,
+    unchecked_js_code: "stack[stack.length - 2] %= stack.pop();",
   },
   "!": {
     impl: function (state) { state.stack.push(pop(state) == 0 ? 1 : 0); },
     desc: "a → a == 0 ? 1 : 0",
     can_jit: true,
-    jit_pop: 1,
-    jit_push: 1,
-    jit_code: "stack[stack.length - 1] = stack[stack.length - 1] ? 1 : 0;",
+    stack_min: 1,
+    stack_return: 1,
+    unchecked_js_code: "stack[stack.length - 1] = stack[stack.length - 1] ? 1 : 0;",
   },
   "`": {
     impl: function (state) { state.stack.push(pop(state) < pop(state) ? 1 : 0); },
     desc: "b a → b > a ? 1 : 0",
     can_jit: true,
-    jit_pop: 2,
-    jit_push: 1,
-    jit_code: "stack[stack.length - 2] = stack.pop() < stack[stack.length - 1] ? 0 : 1;",
+    stack_min: 2,
+    stack_return: 1,
+    unchecked_js_code: "stack[stack.length - 2] = stack.pop() < stack[stack.length - 1] ? 0 : 1;",
   },
   "<": {
     impl: function (state) { state.cold = -1; state.rowd =  0; },
     desc: "() → (); go left",
-    jit_pop: 0,
-    jit_push: 0,
-    jit_code: "",
+    stack_min: 0,
+    stack_return: 0,
+    unchecked_js_code: "",
     can_jit: true,
   },
   ">": {
     impl: function (state) { state.cold =  1; state.rowd =  0; },
     desc: "() → (); go right",
-    jit_pop: 0,
-    jit_push: 0,
-    jit_code: "",
+    stack_min: 0,
+    stack_return: 0,
+    unchecked_js_code: "",
     can_jit: true,
   },
   "^": {
     impl: function (state) { state.cold =  0; state.rowd = -1; },
     desc: "() → (); go up",
-    jit_pop: 0,
-    jit_push: 0,
-    jit_code: "",
+    stack_min: 0,
+    stack_return: 0,
+    unchecked_js_code: "",
     can_jit: true,
   },
   "v": {
     impl: function (state) { state.cold =  0; state.rowd =  1; },
     desc: "() → (); go down",
-    jit_pop: 0,
-    jit_push: 0,
-    jit_code: "",
+    stack_min: 0,
+    stack_return: 0,
+    unchecked_js_code: "",
     can_jit: true,
   },
   "?": {
@@ -145,32 +145,32 @@ let instructions_raw = {
     impl: function (state) { state.mode = "string"; },
     desc: "; toggle string mode",
     can_jit: false, // TODO this should be OK, but we'll need JIT for string mode.
-    jit_pop: 0,
-    jit_push: 0,
+    stack_min: 0,
+    stack_return: 0,
   },
   ":": {
     impl: function (state) { state.stack.push(state.stack[state.stack.length-1]); },
     desc: "a → a a",
     can_jit: true,
-    jit_pop: 1,
-    jit_push: 2,
-    jit_code: "stack.push(stack[stack.length-1]);",
+    stack_min: 1,
+    stack_return: 2,
+    unchecked_js_code: "stack.push(stack[stack.length-1]);",
   },
   "\\": {
     impl: function (state) { let a = pop(state); var b = pop(state); state.stack.push(a, b); },
     desc: "b a → a b",
     can_jit: true,
-    jit_pop: 2,
-    jit_push: 2,
-    jit_code: "stack.push(stack.pop(), stack.pop());",
+    stack_min: 2,
+    stack_return: 2,
+    unchecked_js_code: "stack.push(stack.pop(), stack.pop());",
   },
   "$": {
     impl: function (state) { pop(state); },
     desc: "a → ()",
     can_jit: true,
-    jit_pop: 1,
-    jit_push: 0,
-    jit_code: "stack.pop();",
+    stack_min: 1,
+    stack_return: 0,
+    unchecked_js_code: "stack.pop();",
   },
   ".": {
     impl: function (state) { out(pop(state) + " "); },
@@ -186,25 +186,25 @@ let instructions_raw = {
     impl: function (state) { state.col += state.cold; state.row += state.rowd; },
     desc: "; jump one cell",
     can_jit: true,
-    jit_pop: 0,
-    jit_push: 0,
-    jit_code: "",
+    stack_min: 0,
+    stack_return: 0,
+    unchecked_js_code: "",
   },
   "g": {
     impl: function (state) { let row = pop(state); var col = pop(state); state.stack.push(get_field(state, col, row)); },
     desc: "col row → field[row][col]",
     can_jit: true,
-    jit_pop: 2,
-    jit_push: 1,
-    jit_code: "{let row = stack.pop(); stack[stack.length-1] = (get_field(state, stack[stack.length-1], row));}",
+    stack_min: 2,
+    stack_return: 1,
+    unchecked_js_code: "{let row = stack.pop(); stack[stack.length-1] = (get_field(state, stack[stack.length-1], row));}",
   },
   "p": {
     impl: function (state) { let row = pop(state); var col = pop(state); var val = pop(state); set_field(state, col, row, val); },
     desc: "val col row → (); field[row][col] = val",
     can_jit: true,
-    jit_pop: 3,
-    jit_push: 0,
-    jit_code: function (thread_state) {
+    stack_min: 3,
+    stack_return: 0,
+    unchecked_js_code: function (thread_state) {
       return `
           {
             let row = stack.pop();
@@ -237,9 +237,9 @@ let instructions_raw = {
     impl: function (state) { },
     desc: "; no-op",
     can_jit: true,
-    jit_pop: 0,
-    jit_push: 0,
-    jit_code: "",
+    stack_min: 0,
+    stack_return: 0,
+    unchecked_js_code: "",
   },
   "(": {
     impl: function (state) {
@@ -392,9 +392,9 @@ for(let i=0; i<10; i++) {
     impl: function (state) { state.stack.push(j); },
     desc: `() → ${i}`,
     can_jit: true,
-    jit_pop: 0,
-    jit_push: 1,
-    jit_code: `stack.push(${i});`,
+    stack_min: 0,
+    stack_return: 1,
+    unchecked_js_code: `stack.push(${i});`,
   };
 }
 // Fast access instructions array.
@@ -805,13 +805,13 @@ class Interpreter {
         raw_instruction = instructions_raw[String.fromCharCode(symbol)];
         if (raw_instruction.can_jit && false) {
           state.jit.code += `// ${String.fromCharCode(symbol)} at row ${state.row}, col ${state.col}, heading ${state.rowd}, ${state.cold}\n`;
-          let real_code = raw_instruction.jit_code;
+          let real_code = raw_instruction.unchecked_js_code;
           if (typeof real_code == 'function') {
             real_code = real_code(state);
           }
           state.jit.code += `${real_code}\n`;
-          state.jit.stack_req = Math.max(state.jit.stack_req, state.jit.stack_delta - raw_instruction.jit_pop);
-          state.jit.stack_delta += raw_instruction.jit_push - raw_instruction.jit_pop;
+          state.jit.stack_req = Math.max(state.jit.stack_req, state.jit.stack_delta - raw_instruction.stack_min);
+          state.jit.stack_delta += raw_instruction.stack_return - raw_instruction.stack_min;
         } else {
           state.jit.mode = "stop";
           console.log("Stopping JIT as we're entering an instruction I don't understand.");
