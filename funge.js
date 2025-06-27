@@ -488,6 +488,8 @@ class Interpreter {
     this.threads.forEach(function (thread) {
       thisthis.trigger_event("thread_paused", thread, false)
     });
+    if (old_wake)
+      old_wake();
   }
 
   async sleep_until_unpaused() { // TODO???
@@ -496,7 +498,7 @@ class Interpreter {
     if (this.paused_event) {
       let paused_event = this.paused_event;
       this.paused_event = null;
-      unpause_data = await paused_event;
+      let unpause_data = await paused_event;
       return unpause_data;
     }
   }
@@ -927,6 +929,6 @@ var instance;
 let interpreter = new Interpreter();
 interpreter.load_wasm();
 interpreter.input_queue.push(["set_speed", -50]);
-// interpreter.input_queue.push(["pause"]);
-// interpreter.input_queue.push(["unpause"]); // TODO BROKEN
+interpreter.input_queue.push(["pause"]);
+interpreter.input_queue.push(["unpause"]);
 interpreter.go();
