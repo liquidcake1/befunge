@@ -475,6 +475,7 @@ class Interpreter {
       // We shouldn't be in the sleep loop if paused.
       if (thisthis.awake_sleep != null) thisthis.awake_sleep();
     });
+    // These really need outputting from the main loop, not here!
     this.trigger_event("paused", true);
     this.threads.forEach(function (thread) {
       thisthis.trigger_event("thread_paused", thread, true);
