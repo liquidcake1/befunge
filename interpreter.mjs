@@ -9,245 +9,12 @@
 //   If the thread self-modified, we'll need a means to abort the JITted sequence early.
 // * There is no JIT visualisation.
 
-let file_name = process.argv[2];
-let field_s = require("fs").readFileSync(file_name, "utf8");
-console.log(field_s);
+import { instructions, instructions_raw } from "./instructions.mjs";
+import { Queue } from "./queue.mjs";
 
-let field = field_s.split("\n");
-field.pop();
-field = field.map( x => x.split("").map( c => c.charCodeAt(0) ) );
-console.log(field);
+import { overlay as WS_overlay } from "./overlays/WS.mjs";
+import { overlay as S_overlay } from "./overlays/S.mjs";
 
-let instructions_raw = {
-  "+": {
-    impl: function (thread, thread_num) { instance.exports.plus(thread_num); },
-    //impl: function (thread) { thread.stack.push(-thread.pop() + thread.pop()); },
-    desc: "b a → b + a",
-    can_jit: true,
-    stack_min: 2,
-    stack_return: 1,
-    unchecked_js_code: "stack[stack.length - 2] += stack.pop();",
-  },
-  "-": {
-    impl: function (thread) { thread.stack.push(-thread.pop() + thread.pop()); },
-    desc: "b a → b - a",
-    can_jit: true,
-    stack_min: 2,
-    stack_return: 1,
-    unchecked_js_code: "stack[stack.length - 2] -= stack.pop();",
-  },
-  "*": {
-    impl: function (thread) { thread.stack.push(thread.pop() * thread.pop()); },
-    desc: "b a → b * a",
-    can_jit: true,
-    stack_min: 2,
-    stack_return: 1,
-    unchecked_js_code: "stack[stack.length - 2] *= stack.pop();",
-  },
-  "/": {
-    impl: function (thread) { let a = thread.pop(); let b = thread.pop(); thread.stack.push(Math.floor(b / a)); },
-    desc: "b a → b // a",
-    can_jit: true,
-    stack_min: 2,
-    stack_return: 1,
-    unchecked_js_code: "stack[stack.length - 2] /= stack.pop();",
-  },
-  "%": {
-    impl: function (thread) { let a = thread.pop(); let b = thread.pop(); thread.stack.push(b % a); },
-    desc: "b a → b % a",
-    can_jit: true,
-    stack_min: 2,
-    stack_return: 1,
-    unchecked_js_code: "stack[stack.length - 2] %= stack.pop();",
-  },
-  "!": {
-    impl: function (thread) { thread.stack.push(thread.pop() == 0 ? 1 : 0); },
-    desc: "a → a == 0 ? 1 : 0",
-    can_jit: true,
-    stack_min: 1,
-    stack_return: 1,
-    unchecked_js_code: "stack[stack.length - 1] = stack[stack.length - 1] ? 1 : 0;",
-  },
-  "`": {
-    impl: function (thread) { thread.stack.push(thread.pop() < thread.pop() ? 1 : 0); },
-    desc: "b a → b > a ? 1 : 0",
-    can_jit: true,
-    stack_min: 2,
-    stack_return: 1,
-    unchecked_js_code: "stack[stack.length - 2] = stack.pop() < stack[stack.length - 1] ? 0 : 1;",
-  },
-  "<": {
-    impl: function (thread) { thread.cold = -1; thread.rowd =  0; },
-    desc: "() → (); go left",
-    stack_min: 0,
-    stack_return: 0,
-    unchecked_js_code: "",
-    can_jit: true,
-  },
-  ">": {
-    impl: function (thread) { thread.cold =  1; thread.rowd =  0; },
-    desc: "() → (); go right",
-    stack_min: 0,
-    stack_return: 0,
-    unchecked_js_code: "",
-    can_jit: true,
-  },
-  "^": {
-    impl: function (thread) { thread.cold =  0; thread.rowd = -1; },
-    desc: "() → (); go up",
-    stack_min: 0,
-    stack_return: 0,
-    unchecked_js_code: "",
-    can_jit: true,
-  },
-  "v": {
-    impl: function (thread) { thread.cold =  0; thread.rowd =  1; },
-    desc: "() → (); go down",
-    stack_min: 0,
-    stack_return: 0,
-    unchecked_js_code: "",
-    can_jit: true,
-  },
-  "?": {
-    impl: function (thread) { let x = Math.floor(Math.random() * 4); thread.cold = ((x % 2) * 2 - 1) * Math.floor(x / 2); thread.rowd = ((x % 2) * 2 - 1) * ( 1 - Math.floor(x / 2)); },
-    desc: "() → (); go random cardinal",
-    can_jit: false,
-  },
-  "_": {
-    impl: function (thread) { thread.rowd =  0; thread.cold = thread.pop() == 0 ? 1 : -1; },
-    desc: "a → (); a == 0 ? go right : go left",
-    can_jit: false,
-  },
-  "|": {
-    impl: function (thread) { thread.cold =  0; thread.rowd = thread.pop() == 0 ? 1 : -1; },
-    desc: "a → (); a == 0 ? go down : go up",
-    can_jit: false,
-  },
-  '"': {
-    impl: function (thread) { thread.mode = "string"; },
-    desc: "; toggle string mode",
-    can_jit: false, // TODO this should be OK, but we'll need JIT for string mode.
-    stack_min: 0,
-    stack_return: 0,
-  },
-  ":": {
-    impl: function (thread) { thread.stack.push(thread.stack[thread.stack.length-1]); },
-    desc: "a → a a",
-    can_jit: true,
-    stack_min: 1,
-    stack_return: 2,
-    unchecked_js_code: "stack.push(stack[stack.length-1]);",
-  },
-  "\\": {
-    impl: function (thread) { let a = thread.pop(); var b = thread.pop(); thread.stack.push(a, b); },
-    desc: "b a → a b",
-    can_jit: true,
-    stack_min: 2,
-    stack_return: 2,
-    unchecked_js_code: "stack.push(stack.pop(), stack.pop());",
-  },
-  "$": {
-    impl: function (thread) { thread.pop(); },
-    desc: "a → ()",
-    can_jit: true,
-    stack_min: 1,
-    stack_return: 0,
-    unchecked_js_code: "stack.pop();",
-  },
-  ".": {
-    impl: function (thread) { thread.interpreter.out(thread.pop() + " "); },
-    desc: "a → (); output a",
-    can_jit: false,
-  },
-  ",": {
-    impl: function (thread) { thread.interpreter.out(String.fromCharCode(thread.pop())); },
-    desc: "a → (); output chr(a)",
-    can_jit: false,
-  },
-  "#": {
-    impl: function (thread) { thread.col += thread.cold; thread.row += thread.rowd; },
-    desc: "; jump one cell",
-    can_jit: true,
-    stack_min: 0,
-    stack_return: 0,
-    unchecked_js_code: "",
-  },
-  "g": {
-    impl: function (thread) { let row = thread.pop(); var col = thread.pop(); thread.stack.push(get_field(thread, col, row)); },
-    desc: "col row → field[row][col]",
-    can_jit: true,
-    stack_min: 2,
-    stack_return: 1,
-    unchecked_js_code: "{let row = stack.pop(); stack[stack.length-1] = (get_field(thread, stack[stack.length-1], row));}",
-  },
-  "p": {
-    impl: function (thread) { let row = thread.pop(); var col = thread.pop(); var val = thread.pop(); set_field(thread, col, row, val); },
-    desc: "val col row → (); field[row][col] = val",
-    can_jit: true,
-    stack_min: 3,
-    stack_return: 0,
-    unchecked_js_code: function (thread_state) {
-      return `
-          {
-            let row = stack.pop();
-            let col = stack.pop();
-            set_field(thread, col, row, stack.pop());
-            for (let i=0; i<jit.path.length; i++) {
-              if (jit.path[i][0] == row && jit.path[i][1] == col) {
-                thread.row = ${thread_state.row} + ${thread_state.rowd};
-                thread.col = ${thread_state.col} + ${thread_state.cold};
-                thread.rowd = ${thread_state.rowd};
-                thread.cold = ${thread_state.cold};
-                return;
-              }
-            }
-          }`},
-  },
-  "t": {
-    impl: function (thread) { thread.interpreter.threads.push(thread.split_thread()); },
-    desc: "; create new thread in reverse direction",
-    can_jit: false,
-  },
-  // "&".charCodeAt(0) input number TODO
-  // "~".charCodeAt(0) input characte TODO
-  "@": {
-    impl: function (thread) { thread.interpreter.oute("Normal termination!"); thread.running = false; },
-    desc: "; stop current thread",
-    can_jit: false,
-  },
-  " ": {
-    impl: function (thread) { },
-    desc: "; no-op",
-    can_jit: true,
-    stack_min: 0,
-    stack_return: 0,
-    unchecked_js_code: "",
-  },
-  "(": {
-    impl: function (thread) {
-      const n = thread.pop();
-      let x = 0;
-      for(let i=0; i<n; i++) {
-        x = x * 256 + thread.pop();
-      }
-      if (overlays[x]) {
-        // We don't support ")" anyway so for now don't
-        // need to know how to undo...
-        for(let [k, v] of Object.entries(overlays[x])) {
-          thread.overlays[k.charCodeAt(0)] = v.impl;
-        }
-        thread.stack.push(x);
-        thread.stack.push(1);
-      } else {
-        // Failure, reverse direction.
-        thread.cold *= -1;
-        thread.rowd *= -1;
-      }
-    },
-    desc: "xn ... x1 n → f=(x1 + x2*256 + ... + xn*256^(n-1)) 1 | (); load semantic f or reverse",
-    can_jit: false, // Varargs approach makes JIT hard!
-  },
-};
 function gen_fingerprint(s) {
   let x = 0;
   for(let c of Array.from(s).map(x => x.charCodeAt(0))) {
@@ -256,168 +23,24 @@ function gen_fingerprint(s) {
   return x;
 }
 var overlays = {};
-overlays[gen_fingerprint("WS")] = {
-  "C": {
-    impl: function (thread) {
-      let n = thread.pop();
-      let url = "";
-      for(let i=0; i<n; i++) {
-        url += String.fromCharCode(thread.pop());
-      }
-      console.log(url);
-      const socket = new WebSocket(url);
-      socket.messages = [];
-      socket.addEventListener("message", function (m) { socket.messages.push(m.data); });
-      thread.waiter = function (thread) {
-        console.log("Waiter: " + socket);
-        console.log("readyState: " + socket.readyState);
-        if (socket.readyState == 1) {
-          thread.stack.push(socket);
-          thread.waiter = null;
-          return true;
-        } else if (socket.readyState == 0) {
-          // TODO don't busy-wait this; use open/close -> thread.resolve()
-          return false;
-        } else {
-          // Conection failed!
-          thread.cold *= -1;
-          thread.rowd *= -1;
-          thread.col += thread.cold * 2;
-          thread.row += thread.rowd * 2;
-          return true;
-        }
-      };
-    },
-    desc: "xn ... x1 n → SOCKET | (); connect to websocket x1 .. xn (blocking) or reverse",
-    can_jit: false,
-  },
-  "S": {
-    impl: function (thread) {
-      let socket = thread.pop();
-      console.log(socket);
-      let n = thread.pop();
-      message = "";
-      for(let i=0; i<n; i++) {
-        message += String.fromCharCode(thread.pop());
-      }
-      console.log(socket.readyState);
-      if (socket.readyState == 1) {
-        socket.send(message);
-      } else {
-        thread.cold *= -1;
-        thread.rowd *= -1;
-      }
-    },
-    desc: "xn ... x1 n SOCKET → (); send message to websocket or reverse if disconnected",
-    can_jit: false,
-  },
-  "R": {
-    impl: function (thread) {
-      let socket = thread.pop();
-      thread.waiter = function (thread) {
-        if (socket.messages.length > 0) {
-          let message = socket.messages.shift();
-          for(let c of message) {
-            thread.stack.push(c.charCodeAt(0));
-          }
-          thread.stack.push(message.length);
-          return true;
-        } else if (socket.readyState != 1) {
-          thread.cold *= -1;
-          thread.rowd *= -1;
-          return true;
-        } else {
-          return false;
-        }
-      };
-    },
-    desc: "SOCKET → xn ... x1 n; receive message from websocket (blocking) or reverse if disconnected",
-    can_jit: false,
-  },
-  "D": {
-    impl: function (thread) {
-      thread.pop().close();
-    },
-    desc: "SOCKET → (); disconnect from websocket",
-    can_jit: false,
-  },
-};
-overlays[gen_fingerprint("S")] = {
-  "B": {
-    impl: function (thread) {
-      let count = thread.pop();
-      let topush = 0;
-      if (thread.stack.length >= count) {
-        topush = thread.stack.splice(-count, 1)[0];
-      }
-      thread.stack.push(topush);
-    },
-    desc: "y xn ... x1 n-1 → xn ... x1 y",
-    can_jit: false,
-  },
-  "F": {
-    impl: function (thread) {
-      let count = thread.pop();
-      while(thread.stack.length < count) {
-        thread.stack.splice(0, 0, 0);
-      }
-      let topush = thread.pop();
-      thread.stack.splice(-count + 1, 0, topush);
-    },
-    desc: "xn ... x1 y n-1 → y xn ... x1",
-    can_jit: false,
-  },
-};
-for(let i=0; i<10; i++) {
-  const j = i; // Prevent any capture shenanigans.
-  instructions_raw[i] = {
-    impl: function (state) { state.stack.push(j); },
-    desc: `() → ${i}`,
-    can_jit: true,
-    stack_min: 0,
-    stack_return: 1,
-    unchecked_js_code: `stack.push(${i});`,
-  };
-}
-// Fast access instructions array.
-let instructions = {};
-for(let [s, val] of Object.entries(instructions_raw)) {
-  instructions[s.charCodeAt(0)] = val.impl;
-}
+overlays[gen_fingerprint("WS")] = WS_overlay;
+overlays[gen_fingerprint("S")] = S_overlay;
 
-class Queue {
-  /* Structure is a (hopefully short) list of (longer) lists.
-   * Queue to the last list.
-   * Hold index into first list.
-   */
-  length = 0;
-  index = -1;
-  content = [[]];
-  max_len = 100;
-  push(x) {
-    let content = this.content;
-    if (content[content.length - 1].length > this.max_len) {
-      content.push([]);
-    }
-    content[content.length - 1].push(x);
-    this.length += 1;
-  }
-  pop() {
-    this.index += 1;
-    if (this.index >= this.content[0].length) {
-      if (this.content.length == 1) {
-        throw("empty");
-      }
-      this.content.shift();
-      this.index = 0;
-    }
-    this.length -= 1;
-    return this.content[0][this.index];
-  }
-}
 
 function deep_copy(obj) {
   return JSON.parse(JSON.stringify(obj));
+}
+
+function shallow_copy(obj) {
+  return Object.fromEntries(Object.entries(obj));
+}
+
+function shallowish_copy(obj, i) {
+  if (i > 0) {
+    return shallowish_copy(obj, i - 1);
+  } else {
+    return shallow_copy(obj);
+  }
 }
 
 class Thread {
@@ -459,7 +82,7 @@ class Thread {
   }
 }
 
-class Interpreter {
+export class Interpreter {
   max_loops = 1000;
   paused_wake = null;
   paused_event = null;
@@ -470,6 +93,10 @@ class Interpreter {
   events = {};
   awake_sleep = null;
   stats = [];
+  field = [];
+  instructions = shallow_copy(instructions);
+  instructions_raw = shallow_copy(instructions_raw);
+  overlays = shallowish_copy(overlays, 1);
   input_queue = new Queue(); // Queue things like: change speed, input, etc.
 
   trigger_event(event_name, ...args) {
@@ -583,11 +210,11 @@ class Interpreter {
   }
   set_cell(cell, col, row, val) {
     let val_str = String.fromCharCode(val);
-    field[row][col] = val;
+    this.field[row][col] = val;
     document.getElementById("table").children[row].children[col].innerText = val_str == " " ? "\u00a0" : val_str;
     let title = `(${col},${row})=${val} (${val_str})`;
-    if (instructions_raw[val_str] !== undefined)
-      title += ": " + instructions_raw[val_str].desc;
+    if (this.instructions_raw[val_str] !== undefined)
+      title += ": " + this.instructions_raw[val_str].desc;
     document.getElementById("table").children[row].children[col].title = title;
     let dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
     for(let i=0; i<4; i++) {
@@ -608,7 +235,7 @@ class Interpreter {
   }
   get_field(state, col, row, val) {
     if (check(state, col, row)) {
-      return field[row][col];
+      return this.field[row][col];
     }
   }
   out(s) {
@@ -795,11 +422,11 @@ class Interpreter {
       state.jit.count += 1;
     }
     state.count += 1;
-    let symbol = field[state.row][state.col];
+    let symbol = this.field[state.row][state.col];
     if (state.mode == "normal") {
-      let instruction = state.overlays[symbol] || instructions[symbol];
+      let instruction = state.overlays[symbol] || this.instructions[symbol];
       if (state.jit && state.jit.mode == "follow") {
-        raw_instruction = instructions_raw[String.fromCharCode(symbol)];
+        raw_instruction = this.instructions_raw[String.fromCharCode(symbol)];
         if (raw_instruction.can_jit && false) {
           state.jit.code += `// ${String.fromCharCode(symbol)} at row ${state.row}, col ${state.col}, heading ${state.rowd}, ${state.cold}\n`;
           let real_code = raw_instruction.unchecked_js_code;
@@ -867,65 +494,10 @@ class Interpreter {
     }
     state.col += state.cold;
     state.row += state.rowd;
-    if (state.row == field.length) state.row = 0;
-    else if (state.row == -1) state.row = field.length - 1;
-    if (state.col == field[state.row].length) state.col = 0;
-    else if (state.col == -1) state.col = field[state.row].length - 1;
+    if (state.row == this.field.length) state.row = 0;
+    else if (state.row == -1) state.row = this.field.length - 1;
+    if (state.col == this.field[state.row].length) state.col = 0;
+    else if (state.col == -1) state.col = this.field[state.row].length - 1;
     return 1;
   }
-
-  async load_wasm() {
-    /* 
-          (memory $memory 1)
-          (export "memory" (memory $memory))
-          (func (export "load_first_item_in_mem") (param) (result i32)
-            i32.const 0
-
-            ;; load first item in memory and return the result
-            i32.load
-            ;; store 10000 in the first location in memory
-            i32.const 0
-            i32.const 10000
-            i32.store
-          )
-          */
-    /*
-          (module
-  (func $pop (import "my_namespace" "pop") (param i32) (result i32))
-  (func $push (import "my_namespace" "push") (param i32 i32))
-  (func (export "plus") (param i32)
-    local.get 0
-    local.get 0
-    call $pop
-    local.get 0
-    call $pop
-    i32.add
-    call $push
-))
-*/
-    //let wasm_string = "AGFzbQEAAAABBwFgAn9/AX8DAgEABwoBBmFkZFR3bwAACgkBBwAgACABagsACgRuYW1lAgMBAAA=";
-    let wasm_string = "AGFzbQEAAAABDwNgAX8Bf2ACf38AYAF/AAIoAgxteV9uYW1lc3BhY2UDcG9wAAAMbXlfbmFtZXNwYWNlBHB1c2gAAQMCAQIHCAEEcGx1cwACChEBDwAgACAAEAAgABAAahABCwAcBG5hbWUBDAIAA3BvcAEEcHVzaAIHAwAAAQACAA==";
-    // Fake minus version
-    //let wasm_string = "AGFzbQEAAAABDwNgAX8Bf2ACf38AYAF/AAIoAgxteV9uYW1lc3BhY2UDcG9wAAAMbXlfbmFtZXNwYWNlBHB1c2gAAQMCAQIHCAEEcGx1cwACChEBDwAgACAAEAAgABAAaxABCwAcBG5hbWUBDAIAA3BvcAEEcHVzaAIHAwAAAQACAA==";
-    let wasm_array = new TextEncoder().encode(atob(wasm_string))
-    const importObject = {
-      my_namespace: {
-        pop: threadNo => this.threads[threadNo].pop(),
-        push: (threadNo, i) => this.threads[threadNo].stack.push(i),
-      }
-    };
-    await WebAssembly.compile(wasm_array).then((mod) =>
-      WebAssembly.instantiate(mod, importObject).then(instance1 => {
-        instance = instance1;
-      })
-    );
-    console.log(instance);
-  }
 }
-var instance;
-let interpreter = new Interpreter();
-interpreter.load_wasm();
-interpreter.input_queue.push(["set_speed", -50]);
-interpreter.input_queue.push(["pause"]);
-interpreter.input_queue.push(["unpause"]);
-interpreter.go();
