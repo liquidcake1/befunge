@@ -473,7 +473,7 @@ class Interpreter {
   input_queue = new Queue(); // Queue things like: change speed, input, etc.
 
   trigger_event(event_name, ...args) {
-    console.log(`Event: ${event_name} -- ${JSON.stringify(args, null, null)}`);
+    console.log(`Event: ${event_name} -- ${args}`);
   }
 
   set_speed(raw_speed) {
