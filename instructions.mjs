@@ -187,8 +187,20 @@ export let instructions_raw = {
     desc: "; create new thread in reverse direction",
     can_jit: false,
   },
-  // "&".charCodeAt(0) input number TODO
-  // "~".charCodeAt(0) input characte TODO
+  // "&" input character TODO
+  "~": { // TODO handle EOF properly (push nothing)
+    impl: function (thread) {
+      if (thread.interpreter.stdin_queue.length > 0) {
+        console.log("Have data!");
+        thread.stack.push(thread.interpreter.stdin_queue.pop());
+      } else {
+        console.log("Have no data!");
+        return new Promise(r => thread.interpreter.stdin_waiters.push(r)).then(function (char_code) {thread.stack.push(char_code); thread.blocked = false;});
+      }
+    },
+    desc: "() → x; read a character from input",
+    can_jit: false,
+  },
   "@": {
     impl: function (thread) { thread.interpreter.oute("Normal termination!"); thread.running = false; },
     desc: "; stop current thread",

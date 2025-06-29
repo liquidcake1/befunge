@@ -19,3 +19,10 @@ interpreter.input_queue.push(["set_speed", -50]);
 interpreter.input_queue.push(["pause"]);
 interpreter.input_queue.push(["unpause"]);
 interpreter.go();
+process.stdin.on('data', function (chunk) {
+  chunk.forEach(x => interpreter.input_queue.push(["stdin", x]));
+});
+setTimeout(function () {
+  console.log("sending @");
+  interpreter.input_queue.push(["stdin", "@".charCodeAt(0)]);
+}, 2000);

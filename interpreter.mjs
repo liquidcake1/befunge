@@ -98,6 +98,8 @@ export class Interpreter {
   instructions_raw = shallow_copy(instructions_raw);
   overlays = shallowish_copy(overlays, 1);
   input_queue = new Queue(); // Queue things like: change speed, input, etc.
+  stdin_queue = new Queue(); // Chars from stdin.
+  stdin_waiters = [];
 
   trigger_event(event_name, ...args) {
     console.log(`Event: ${event_name} -- ${args}`);
@@ -280,6 +282,12 @@ export class Interpreter {
           this.pause();
         } else if (item[0] == "unpause") {
           this.unpause();
+        } else if (item[0] == "stdin") {
+          if (this.stdin_waiters.length > 0) {
+            this.stdin_waiters.shift()(item[1]);
+          } else {
+            this.stdin_queue.push(item[1]);
+          }
         }
       }
       let slice_loops = this.slice_loops;
@@ -314,6 +322,8 @@ export class Interpreter {
       while(count < slice_loops && this.threads.length > 0) {
         // This will _not_ iterate over newly-added threads.
         let to_iter = limit_threads !== null ? limit_threads : this.threads;
+        to_iter = to_iter.filter(thread => !thread.blocked);
+        if (to_iter.length == 0) break;
         let min_count = Math.min(...to_iter.map(x => x.tick_count));
         to_iter.forEach((thread, i) => {
           if (thread.tick_count == min_count) {
@@ -369,40 +379,40 @@ export class Interpreter {
   diagonalise_with_dir(row, col, rowd, cold) {
     return 4 * this.diagonalise_positive(row, col) + this.diagonalise_any(rowd, cold);
   }
-  tick(state, target_ticks, thread_num) {
+  tick(thread, target_ticks, thread_num) {
     //if (true) { } else
-    if (!state.jit) {
-      let diagonal_index = this.diagonalise_with_dir(state.row, state.col, state.rowd, state.cold);
+    if (!thread.jit) {
+      let diagonal_index = this.diagonalise_with_dir(thread.row, thread.col, thread.rowd, thread.cold);
       let cell_stats = this.stats[diagonal_index];
-      if (state.waiter) {
-        if (state.waiter(state)) {
-          state.waiter = null;
+      if (thread.waiter) {
+        if (thread.waiter(thread)) {
+          thread.waiter = null;
         }
         return 1;
       }
       if (cell_stats) {
         if (cell_stats.jit) {
           let jit = cell_stats.jit;
-          if (jit.count <= target_ticks && state.stack.length >= jit.stack_req) {
-            state.row = jit.end_row;
-            state.col = jit.end_col;
-            state.rowd = jit.end_rowd;
-            state.cold = jit.end_cold;
+          if (jit.count <= target_ticks && thread.stack.length >= jit.stack_req) {
+            thread.row = jit.end_row;
+            thread.col = jit.end_col;
+            thread.rowd = jit.end_rowd;
+            thread.cold = jit.end_cold;
             try {
-              jit.call(jit, state);
+              jit.call(jit, thread);
             } catch (err) {
-              error(state, `Exception caught in jit: ${err.message}`);
+              error(thread, `Exception caught in jit: ${err.message}`);
             }
-            state.count += jit.count;
+            thread.count += jit.count;
             return jit.count;
           }
-        } else if (state.mode == "normal") {
+        } else if (thread.mode == "normal") {
           cell_stats.count += 1;
           if (cell_stats.count == 10) {
             console.log(`loop found at ${diagonal_index}?`);
-            state.jit = {
+            thread.jit = {
               mode: "follow",
-              path: [[state.row, state.col, state.rowd, state.cold]],
+              path: [[thread.row, thread.col, thread.rowd, thread.cold]],
               code: "",
               stack_req: 0,
               stack_delta: 0,
@@ -413,91 +423,95 @@ export class Interpreter {
       } else {
         this.stats[diagonal_index] = {"count": 1, jit_starts: []};
       }
-    } else if (state.jit.mode == "follow") {
-      if (state.row == state.jit.path[0][0] && state.col == state.jit.path[0][1] && state.rowd == state.jit.path[0][2] && state.cold == state.jit.path[0][3]) {
+    } else if (thread.jit.mode == "follow") {
+      if (thread.row == thread.jit.path[0][0] && thread.col == thread.jit.path[0][1] && thread.rowd == thread.jit.path[0][2] && thread.cold == thread.jit.path[0][3]) {
         // loop found
-        state.jit.mode = "stop";
+        thread.jit.mode = "stop";
       }
-      state.jit.path.push([state.row, state.col, state.rowd, state.cold]);
-      state.jit.count += 1;
+      thread.jit.path.push([thread.row, thread.col, thread.rowd, thread.cold]);
+      thread.jit.count += 1;
     }
-    state.count += 1;
-    let symbol = this.field[state.row][state.col];
-    if (state.mode == "normal") {
-      let instruction = state.overlays[symbol] || this.instructions[symbol];
-      if (state.jit && state.jit.mode == "follow") {
+    thread.count += 1;
+    let symbol = this.field[thread.row][thread.col];
+    if (thread.mode == "normal") {
+      let instruction = thread.overlays[symbol] || this.instructions[symbol];
+      if (thread.jit && thread.jit.mode == "follow") {
         raw_instruction = this.instructions_raw[String.fromCharCode(symbol)];
         if (raw_instruction.can_jit && false) {
-          state.jit.code += `// ${String.fromCharCode(symbol)} at row ${state.row}, col ${state.col}, heading ${state.rowd}, ${state.cold}\n`;
+          thread.jit.code += `// ${String.fromCharCode(symbol)} at row ${thread.row}, col ${thread.col}, heading ${thread.rowd}, ${thread.cold}\n`;
           let real_code = raw_instruction.unchecked_js_code;
           if (typeof real_code == 'function') {
-            real_code = real_code(state);
+            real_code = real_code(thread);
           }
-          state.jit.code += `${real_code}\n`;
-          state.jit.stack_req = Math.max(state.jit.stack_req, state.jit.stack_delta - raw_instruction.stack_min);
-          state.jit.stack_delta += raw_instruction.stack_return - raw_instruction.stack_min;
+          thread.jit.code += `${real_code}\n`;
+          thread.jit.stack_req = Math.max(thread.jit.stack_req, thread.jit.stack_delta - raw_instruction.stack_min);
+          thread.jit.stack_delta += raw_instruction.stack_return - raw_instruction.stack_min;
         } else {
-          state.jit.mode = "stop";
+          thread.jit.mode = "stop";
           console.log("Stopping JIT as we're entering an instruction I don't understand.");
-          console.log(state.jit)
+          console.log(thread.jit)
         }
       }
+      console.log("Executing " + String.fromCharCode(symbol));
       if (instruction == null) {
-        this.error(state, "Invalid instruction: " + symbol);
+        this.error(thread, "Invalid instruction: " + symbol);
       } else {
         try {
-          instruction(state, thread_num);
+          let ret = instruction(thread, thread_num);
+          if (ret && ret.constructor === Promise) {
+            thread.blocked = true;
+          }
         } catch (err) {
-          this.error(state, "Exception caught during " + symbol + ": " + err.message);
+          this.error(thread, "Exception caught during " + symbol + ": " + err.message);
           console.log(err.stack);
         }
       }
-    } else if (state.mode == "string") {
+    } else if (thread.mode == "string") {
       if (symbol == '"'.charCodeAt(0)) {
-        state.mode = "normal";
+        thread.mode = "normal";
       } else {
-        state.stack.push(symbol);
+        thread.stack.push(symbol);
       }
     }
-    if (state.jit && state.jit.mode == "stop") {
-      if (state.jit.count > 0) {
+    if (thread.jit && thread.jit.mode == "stop") {
+      if (thread.jit.count > 0) {
         console.log("Loop found");
-        console.log(state.jit.path);
-        let code=`jit.call=function (jit, state) {\nlet stack = state.stack;\n${state.jit.code}\n}`;
+        console.log(thread.jit.path);
+        let code=`jit.call=function (jit, thread) {\nlet stack = thread.stack;\n${thread.jit.code}\n}`;
         console.log(code);
-        let resting_place = state.jit.path[state.jit.path.length - 1];
+        let resting_place = thread.jit.path[thread.jit.path.length - 1];
         let jit = {
           end_row: resting_place[0],
           end_col: resting_place[1],
           end_rowd: resting_place[2],
           end_cold: resting_place[3],
-          count: state.jit.count,
-          path: state.jit.path,
-          stack_req: state.jit.stack_req,
+          count: thread.jit.count,
+          path: thread.jit.path,
+          stack_req: thread.jit.stack_req,
           code: code,
         };
         console.log(jit);
         eval(code);
-        let starting_place = state.jit.path[0];
+        let starting_place = thread.jit.path[0];
         let diagonal_index = this.diagonalise_with_dir(...starting_place);
-        for(let i=0; i<state.jit.path.length; i++) {
-          let cell_diagonal_index = this.diagonalise_with_dir(...state.jit.path[i]);
+        for(let i=0; i<thread.jit.path.length; i++) {
+          let cell_diagonal_index = this.diagonalise_with_dir(...thread.jit.path[i]);
           stats[cell_diagonal_index] ||= {count: 0, jit_starts: []};
           this.stats[cell_diagonal_index].jit_starts.push(diagonal_index);
         }
         this.stats[diagonal_index].jit = jit;
       } else {
         console.log(`Abandoning empty JIT attempt`);
-        console.log(state.jit);
+        console.log(thread.jit);
       }
-      state.jit = null;
+      thread.jit = null;
     }
-    state.col += state.cold;
-    state.row += state.rowd;
-    if (state.row == this.field.length) state.row = 0;
-    else if (state.row == -1) state.row = this.field.length - 1;
-    if (state.col == this.field[state.row].length) state.col = 0;
-    else if (state.col == -1) state.col = this.field[state.row].length - 1;
+    thread.col += thread.cold;
+    thread.row += thread.rowd;
+    if (thread.row == this.field.length) thread.row = 0;
+    else if (thread.row == -1) thread.row = this.field.length - 1;
+    if (thread.col == this.field[thread.row].length) thread.col = 0;
+    else if (thread.col == -1) thread.col = this.field[thread.row].length - 1;
     return 1;
   }
 }
