@@ -11,9 +11,11 @@
 
 import { instructions, instructions_raw } from "./instructions.mjs";
 import { Queue } from "./queue.mjs";
+import { Jit } from "./jit.mjs";
 
 import { overlay as WS_overlay } from "./overlays/WS.mjs";
 import { overlay as S_overlay } from "./overlays/S.mjs";
+
 
 function gen_fingerprint(s) {
   let x = 0;
@@ -100,6 +102,10 @@ export class Interpreter {
   input_queue = new Queue(); // Queue things like: change speed, input, etc.
   stdin_queue = new Queue(); // Chars from stdin.
   stdin_waiters = [];
+
+  constructor() {
+    this.jit = new Jit(this);
+  }
 
   trigger_event(event_name, ...args) {
     console.log(`Event: ${event_name} -- ${args}`);
@@ -218,22 +224,7 @@ export class Interpreter {
     if (this.instructions_raw[val_str] !== undefined)
       title += ": " + this.instructions_raw[val_str].desc;
     document.getElementById("table").children[row].children[col].title = title;
-    let dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-    for(let i=0; i<4; i++) {
-      let rowd = dirs[i][0];
-      let cold = dirs[i][1];
-      let cell_diagonal_index = this.diagonalise_with_dir(row, col, rowd, cold);
-      let cell_stats = this.stats[cell_diagonal_index];
-      if (cell_stats) {
-        console.log(`clearing jit at ${row} ${col} ${rowd} ${cold}`);
-        for(let j=0; j<cell_stats.jit_starts.length; j++) {
-          console.log(`clearing jit at ${cell_stats.jit_starts[j]}`);
-          this.stats[cell_stats.jit_starts[j]] = undefined;
-        }
-      } else {
-        //console.log(`Not clearing jit at ${row} ${col} ${rowd} ${cold}`);
-      }
-    }
+    this.jit.cell_changed(row, col);
   }
   get_field(state, col, row, val) {
     if (check(state, col, row)) {
@@ -348,110 +339,20 @@ export class Interpreter {
     running_wake();
     console.log(`exited main_loop with ticks ${ticks}`);
   }
-  diagonalise_positive(row, col) {
-    /*
-        0 1 3 6
-        2 4 7
-        5 8
-        9
-        */
-    let shell = row + col;
-    let prev_shell_indices = shell * (shell + 1) / 2;
-    return prev_shell_indices + row;
-  }
-  diagonalise_any(row, col) {
-    /*
-        35 21 11 23 39
-        20 10  4 12 24
-         9  3  0  1  5
-        18  8  2  6 14
-        31 17  7 15 27
-        */
-    let shell = Math.abs(row) + Math.abs(col);
-    if (shell == 0) return 0
-    let prev_shell_indices = 2 * shell * (shell - 1);
-    if (row >= 0) {
-      return prev_shell_indices + shell + 1 - col;
-    } else {
-      return prev_shell_indices + 3 * shell + 1 + col;
-    }
-  }
-  diagonalise_with_dir(row, col, rowd, cold) {
-    return 4 * this.diagonalise_positive(row, col) + this.diagonalise_any(rowd, cold);
-  }
   tick(thread, target_ticks, thread_num) {
-    //if (true) { } else
-    if (!thread.jit) {
-      let diagonal_index = this.diagonalise_with_dir(thread.row, thread.col, thread.rowd, thread.cold);
-      let cell_stats = this.stats[diagonal_index];
-      if (thread.waiter) {
-        if (thread.waiter(thread)) {
-          thread.waiter = null;
-        }
-        return 1;
+    if (thread.waiter) {
+      if (thread.waiter(thread)) {
+        thread.waiter = null;
       }
-      if (cell_stats) {
-        if (cell_stats.jit) {
-          let jit = cell_stats.jit;
-          if (jit.count <= target_ticks && thread.stack.length >= jit.stack_req) {
-            thread.row = jit.end_row;
-            thread.col = jit.end_col;
-            thread.rowd = jit.end_rowd;
-            thread.cold = jit.end_cold;
-            try {
-              jit.call(jit, thread);
-            } catch (err) {
-              error(thread, `Exception caught in jit: ${err.message}`);
-            }
-            thread.count += jit.count;
-            return jit.count;
-          }
-        } else if (thread.mode == "normal") {
-          cell_stats.count += 1;
-          if (cell_stats.count == 10) {
-            console.log(`loop found at ${diagonal_index}?`);
-            thread.jit = {
-              mode: "follow",
-              path: [[thread.row, thread.col, thread.rowd, thread.cold]],
-              code: "",
-              stack_req: 0,
-              stack_delta: 0,
-              count: 0,
-            };
-          }
-        }
-      } else {
-        this.stats[diagonal_index] = {"count": 1, jit_starts: []};
-      }
-    } else if (thread.jit.mode == "follow") {
-      if (thread.row == thread.jit.path[0][0] && thread.col == thread.jit.path[0][1] && thread.rowd == thread.jit.path[0][2] && thread.cold == thread.jit.path[0][3]) {
-        // loop found
-        thread.jit.mode = "stop";
-      }
-      thread.jit.path.push([thread.row, thread.col, thread.rowd, thread.cold]);
-      thread.jit.count += 1;
+      return 1;
     }
-    thread.count += 1;
-    let symbol = this.field[thread.row][thread.col];
     if (thread.mode == "normal") {
-      let instruction = thread.overlays[symbol] || this.instructions[symbol];
-      if (thread.jit && thread.jit.mode == "follow") {
-        raw_instruction = this.instructions_raw[String.fromCharCode(symbol)];
-        if (raw_instruction.can_jit && false) {
-          thread.jit.code += `// ${String.fromCharCode(symbol)} at row ${thread.row}, col ${thread.col}, heading ${thread.rowd}, ${thread.cold}\n`;
-          let real_code = raw_instruction.unchecked_js_code;
-          if (typeof real_code == 'function') {
-            real_code = real_code(thread);
-          }
-          thread.jit.code += `${real_code}\n`;
-          thread.jit.stack_req = Math.max(thread.jit.stack_req, thread.jit.stack_delta - raw_instruction.stack_min);
-          thread.jit.stack_delta += raw_instruction.stack_return - raw_instruction.stack_min;
-        } else {
-          thread.jit.mode = "stop";
-          console.log("Stopping JIT as we're entering an instruction I don't understand.");
-          console.log(thread.jit)
-        }
+      let jit_return = this.jit.step_jit(thread, target_ticks);
+      if (jit_return > 0) {
+        return jit_return;
       }
+      let symbol = this.field[thread.row][thread.col];
+      let instruction = thread.overlays[symbol] || this.instructions[symbol];
       console.log("Executing " + String.fromCharCode(symbol));
       if (instruction == null) {
         this.error(thread, "Invalid instruction: " + symbol);
@@ -473,39 +374,7 @@ export class Interpreter {
         thread.stack.push(symbol);
       }
     }
-    if (thread.jit && thread.jit.mode == "stop") {
-      if (thread.jit.count > 0) {
-        console.log("Loop found");
-        console.log(thread.jit.path);
-        let code=`jit.call=function (jit, thread) {\nlet stack = thread.stack;\n${thread.jit.code}\n}`;
-        console.log(code);
-        let resting_place = thread.jit.path[thread.jit.path.length - 1];
-        let jit = {
-          end_row: resting_place[0],
-          end_col: resting_place[1],
-          end_rowd: resting_place[2],
-          end_cold: resting_place[3],
-          count: thread.jit.count,
-          path: thread.jit.path,
-          stack_req: thread.jit.stack_req,
-          code: code,
-        };
-        console.log(jit);
-        eval(code);
-        let starting_place = thread.jit.path[0];
-        let diagonal_index = this.diagonalise_with_dir(...starting_place);
-        for(let i=0; i<thread.jit.path.length; i++) {
-          let cell_diagonal_index = this.diagonalise_with_dir(...thread.jit.path[i]);
-          stats[cell_diagonal_index] ||= {count: 0, jit_starts: []};
-          this.stats[cell_diagonal_index].jit_starts.push(diagonal_index);
-        }
-        this.stats[diagonal_index].jit = jit;
-      } else {
-        console.log(`Abandoning empty JIT attempt`);
-        console.log(thread.jit);
-      }
-      thread.jit = null;
-    }
+    thread.tick_count += 1;
     thread.col += thread.cold;
     thread.row += thread.rowd;
     if (thread.row == this.field.length) thread.row = 0;
