@@ -414,10 +414,10 @@ export class Interpreter {
     thread.tick_count += 1;
     thread.col += thread.cold;
     thread.row += thread.rowd;
-    if (thread.row == this.field.length) thread.row = 0;
-    else if (thread.row == -1) thread.row = this.field.length - 1;
-    if (thread.col == this.field[thread.row].length) thread.col = 0;
-    else if (thread.col == -1) thread.col = this.field[thread.row].length - 1;
+    if (thread.row == this.field.length && thread.rowd > 0) thread.row = 0;
+    else if (thread.row == -1 && thread.rowd < 0) thread.row = this.field.length - 1;
+    if (thread.col == this.field[thread.row].length && thread.cold > 0) thread.col = 0;
+    else if (thread.col == -1 && thread.cold < 0) thread.col = this.field[thread.row].length - 1;
     return 1;
   }
 }
