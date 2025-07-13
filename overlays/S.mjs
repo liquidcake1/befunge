@@ -1,5 +1,5 @@
 export let overlay = {
-  "B": {
+  "P": {
     impl: function (thread) {
       let count = thread.pop();
       let topush = 0;
@@ -11,7 +11,7 @@ export let overlay = {
     desc: "y xn ... x1 n-1 → xn ... x1 y",
     can_jit: false,
   },
-  "F": {
+  "B": {
     impl: function (thread) {
       let count = thread.pop();
       while(thread.stack.length < count) {

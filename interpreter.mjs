@@ -13,8 +13,9 @@ import { instructions, instructions_raw } from "./instructions.mjs";
 import { Queue } from "./queue.mjs";
 import { Jit } from "./jit.mjs";
 
-import { overlay as WS_overlay } from "./overlays/WS.mjs";
 import { overlay as S_overlay } from "./overlays/S.mjs";
+import { overlay as SOCK_overlay } from "./overlays/SOCK.mjs";
+import { overlay as WS_overlay } from "./overlays/WS.mjs";
 
 
 function gen_fingerprint(s) {
@@ -25,8 +26,9 @@ function gen_fingerprint(s) {
   return x;
 }
 var overlays = {};
-overlays[gen_fingerprint("WS")] = WS_overlay;
 overlays[gen_fingerprint("S")] = S_overlay;
+overlays[gen_fingerprint("SOCK")] = SOCK_overlay;
+overlays[gen_fingerprint("WS")] = WS_overlay;
 
 
 function deep_copy(obj) {
@@ -119,6 +121,7 @@ export class Interpreter {
       this.slice_sleep = Math.floor(1.1 ** -raw_speed);
       this.slice_loops = 1;
     }
+    console.log("set_speed: " + this.slice_sleep + " " + this.slice_loops);
   }
 
   toggle_pause(e) {
@@ -128,6 +131,7 @@ export class Interpreter {
       this.unpause();
     }
   }
+
   pause() {
     let thisthis = this;
     this.paused_event = new Promise(function (r) {
@@ -141,6 +145,7 @@ export class Interpreter {
       thisthis.trigger_event("thread_paused", thread, true);
     });
   }
+
   unpause() {
     let old_wake = this.paused_wake;
     let thisthis = this;
@@ -166,14 +171,15 @@ export class Interpreter {
 
   step(e) { // TODO ???
     let old_wake = this.paused_wake;
-    pause();
+    this.pause();
     if (old_wake !== null) {
       old_wake({count: 1});
     }
   }
+
   step_thread(thread) { // ???
     let old_wake = this.paused_wake;
-    pause();
+    this.pause();
     if (old_wake !== null) {
       old_wake({threads: [thread], count: 1});
     }
@@ -204,36 +210,39 @@ export class Interpreter {
     if (this.awake_sleep != null) this.awake_sleep();
   }
 
-  check(state, row, col) {
-    if (row < 0 || row >= height) error(state, `Row ${row} is out of bounds`);
-    else if (col < 0 || col >= height) error(state, `Col ${col} is out of bounds`);
+  check(state, col, row) {
+    if (row < 0 || row >= this.field.length) this.error(state, `Row ${row} is out of bounds`);
+    //else if (col < 0 || col >= this.field[row].length) this.error(state, `Col ${col} is out of bounds`);
     else return true;
   }
+
   set_field(state, col, row, val) {
     if (this.check(state, col, row)) {
-      set_cell(document.getElementById("table").children[row].children[col], col, row, val);
+      this.set_cell(col, row, val);
     } else {
       console.log(`out of bounds access ${state} ${col} ${row} ${val}`);
     }
   }
-  set_cell(cell, col, row, val) {
+
+  set_cell(col, row, val) {
     let val_str = String.fromCharCode(val);
     this.field[row][col] = val;
-    document.getElementById("table").children[row].children[col].innerText = val_str == " " ? "\u00a0" : val_str;
     let title = `(${col},${row})=${val} (${val_str})`;
     if (this.instructions_raw[val_str] !== undefined)
       title += ": " + this.instructions_raw[val_str].desc;
-    document.getElementById("table").children[row].children[col].title = title;
     this.jit.cell_changed(row, col);
   }
+
   get_field(state, col, row, val) {
-    if (check(state, col, row)) {
+    if (this.check(state, col, row)) {
       return this.field[row][col];
     }
   }
+
   out(s) {
     this.trigger_event("char_out", s);
     console.log("Out: " + s);
+    process.stdout.write(s);
   }
   oute(s) {
     this.trigger_event("error_ocurred", s);
@@ -244,19 +253,33 @@ export class Interpreter {
   outnl() {
     console.log("Outnl");
   }
+
   error(thread, message) {
     thread.running = false;
     this.output_error(thread, message);
   }
+
   output_error(thread, message) {
     this.oute(`ERROR: ${message}`);
-    this.oute(`State was: ${thread}`);
+    this.oute(`State was: row=${thread.row} col=${thread.col} stack=${thread.stack}`);
+    this.output_field();
+  }
+  
+  output_field() {
+    for(let row=0; row<this.field.length; row++) {
+      for(let col=0; col<this.field[row].length; col++) {
+        let c = this.field[row][col];
+        process.stdout.write(c > 31 && c < 127 ? String.fromCharCode(this.field[row][col]) : "?");
+      }
+      process.stdout.write("\n");
+    }
   }
 
   async sleep(ms) {
     await new Promise(r => { this.awake_sleep = r; setTimeout(r, ms) });
     this.awake_sleep = null;
   }
+
   async main_loop() {
     let ticks = 0;
     this.running = true;
@@ -290,9 +313,10 @@ export class Interpreter {
 
       if (ticks > this.max_loops) {
         let end_time = new Date().getTime();
-        this.oute(`Ran out of ticks! (${ticks} > ${document.getElementById("max_loops").value})`);
+        this.oute(`Ran out of ticks! (${ticks} > ${this.max_loops})`);
         console.log(`${ticks} in ${end_time - start_time} is ${ticks / (end_time - start_time) / 1000} MHz`);
-        pause();
+        this.pause();
+        this.output_field();
       }
 
       let unpause_data = await this.sleep_until_unpaused();
@@ -338,22 +362,32 @@ export class Interpreter {
     this.trigger_event("terminate");
     running_wake();
     console.log(`exited main_loop with ticks ${ticks}`);
+    let end_time = new Date().getTime();
+    console.log(`${ticks} in ${end_time - start_time} is ${ticks / (end_time - start_time) / 1000} MHz`);
+    this.output_field();
   }
+
   tick(thread, target_ticks, thread_num) {
     if (thread.waiter) {
-      if (thread.waiter(thread)) {
-        thread.waiter = null;
+      try {
+        if (thread.waiter(thread)) {
+          thread.waiter = null;
+        }
+      } catch (err) {
+        this.error(thread, "Exception caught during waiter: " + err.message);
+        console.log(err.stack);
       }
       return 1;
     }
     if (thread.mode == "normal") {
+      let symbol = this.field[thread.row][thread.col];
+      let instruction = thread.overlays[symbol] || this.instructions[symbol];
+      console.log(`Executing ${String.fromCharCode(symbol)} at ${thread.col},${thread.row} stack_length=${thread.stack.length} stack_tail=${thread.stack.slice(-10)}`);
+      //console.log("Executing " + String.fromCharCode(symbol));
       let jit_return = this.jit.step_jit(thread, target_ticks);
       if (jit_return > 0) {
         return jit_return;
       }
-      let symbol = this.field[thread.row][thread.col];
-      let instruction = thread.overlays[symbol] || this.instructions[symbol];
-      console.log("Executing " + String.fromCharCode(symbol));
       if (instruction == null) {
         this.error(thread, "Invalid instruction: " + symbol);
       } else {
@@ -368,6 +402,7 @@ export class Interpreter {
         }
       }
     } else if (thread.mode == "string") {
+      let symbol = this.field[thread.row][thread.col];
       if (symbol == '"'.charCodeAt(0)) {
         thread.mode = "normal";
       } else {

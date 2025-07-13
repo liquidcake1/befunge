@@ -152,15 +152,15 @@ export let instructions_raw = {
     unchecked_js_code: "",
   },
   "g": {
-    impl: function (thread) { let row = thread.pop(); var col = thread.pop(); thread.stack.push(get_field(thread, col, row)); },
+    impl: function (thread) { let row = thread.pop(); var col = thread.pop(); thread.stack.push(thread.interpreter.get_field(thread, col, row)); },
     desc: "col row → field[row][col]",
     can_jit: true,
     stack_min: 2,
     stack_return: 1,
-    unchecked_js_code: "{let row = stack.pop(); stack[stack.length-1] = (get_field(thread, stack[stack.length-1], row));}",
+    unchecked_js_code: "{let row = stack.pop(); stack[stack.length-1] = (thread.interpreter.get_field(thread, stack[stack.length-1], row));}",
   },
   "p": {
-    impl: function (thread) { let row = thread.pop(); var col = thread.pop(); var val = thread.pop(); set_field(thread, col, row, val); },
+    impl: function (thread) { let row = thread.pop(); var col = thread.pop(); var val = thread.pop(); thread.interpreter.set_field(thread, col, row, val); },
     desc: "val col row → (); field[row][col] = val",
     can_jit: true,
     stack_min: 3,
@@ -170,7 +170,7 @@ export let instructions_raw = {
           {
             let row = stack.pop();
             let col = stack.pop();
-            set_field(thread, col, row, stack.pop());
+            thread.interpreter.set_field(thread, col, row, stack.pop());
             for (let i=0; i<jit.path.length; i++) {
               if (jit.path[i][0] == row && jit.path[i][1] == col) {
                 thread.row = ${thread_state.row} + ${thread_state.rowd};
@@ -221,10 +221,10 @@ export let instructions_raw = {
       for(let i=0; i<n; i++) {
         x = x * 256 + thread.pop();
       }
-      if (overlays[x]) {
+      if (thread.interpreter.overlays[x]) {
         // We don't support ")" anyway so for now don't
         // need to know how to undo...
-        for(let [k, v] of Object.entries(overlays[x])) {
+        for(let [k, v] of Object.entries(thread.interpreter.overlays[x])) {
           thread.overlays[k.charCodeAt(0)] = v.impl;
         }
         thread.stack.push(x);

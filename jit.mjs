@@ -16,7 +16,7 @@ function dediagonalise_positive(diagonal_index) {
   let row_0_index = diagonalise_positive(0, shell);
   let row = diagonal_index - row_0_index;
   let col = shell - row;
-  return [row, col]; 
+  return [row, col];
 }
 
 function diagonalise_any(row, col) {
@@ -158,12 +158,12 @@ export class Jit {
         if (cell_stats.hit_count < this.threshold) {
           return 0;
         }
-        console.log(`loop found at ${diagonal_index}?`);
+        //console.log(`loop found at ${diagonal_index}?`);
         thread.jit_path = jit_path = new JitPath();
         // Fall through to below now.
       }
     }
-    console.log(`${jit_path}`);
+    //console.log(`${jit_path}`);
     if (jit_path.path.length > 0 && diagonal_index == jit_path.path[0]) {
       // We completed a path.
       let jit = this.complete_jit(thread);
@@ -174,10 +174,21 @@ export class Jit {
     // We're following a path.
     // TODO this should not need to do string futzing.
     let symbol = this.interpreter.field[thread.row][thread.col];
+    if (thread.overlays[symbol] !== undefined) {
+      // TODO
+      //console.log("Stopping JIT as we're entering an instruction from an overlay.");
+      this.complete_jit(thread);
+      return 0;
+    }
     let raw_instruction = this.interpreter.instructions_raw[String.fromCharCode(symbol)];
+    if (raw_instruction === undefined) {
+      //console.log("Stopping JIT as we're entering an unknown instruction.");
+      this.complete_jit(thread);
+      return 0;
+    }
     if (!raw_instruction.can_jit) {
-      console.log("Stopping JIT as we're entering an instruction I don't understand.");
-      console.log(jit_path);
+      //console.log("Stopping JIT as we're entering an instruction I don't understand.");
+      //console.log(jit_path);
       this.complete_jit(thread);
       return 0;
     }
@@ -191,7 +202,7 @@ export class Jit {
     jit_path.stack_delta += raw_instruction.stack_return - raw_instruction.stack_min;
     jit_path.path.push(diagonal_index);
     jit_path.instruction_count += 1;
-    console.log(jit_path);
+    //console.log(jit_path);
     return 0;
   }
 
@@ -199,18 +210,18 @@ export class Jit {
     let jit_path = thread.jit_path;
     thread.jit_path = undefined;
     if (jit_path.path.length == 0) {
-      console.log("JIT path is empty.");
+      //console.log("JIT path is empty.");
       return;
     }
     console.log("Performing JIT compile, length " + jit_path.path.length);
-    console.log(jit_path);
+    //console.log(jit_path);
     // TODO: jit_path.compile()
     let code = `jit.call=function (thread) {\nlet stack = thread.stack;\n${jit_path.code}\n}`;
-    console.log(code);
+    //console.log(code);
     let jit = new JitFragment(thread, jit_path.instruction_count, jit_path.path, jit_path.stack_req, code);
-    console.log(jit);
+    //console.log(jit);
     eval(code);
-    console.log(jit);
+    //console.log(jit);
     let starting_place = jit_path.path[0];
     this.cell_stats[jit_path.path[0]].jit = jit;
     for(let i=0; i<jit_path.path.length; i++) {
