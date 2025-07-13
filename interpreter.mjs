@@ -366,6 +366,7 @@ export class Interpreter {
     let end_time = new Date().getTime();
     console.log(`${ticks} in ${end_time - start_time} is ${ticks / (end_time - start_time) / 1000} MHz`);
     this.output_field();
+    process.exit(0);
   }
 
   tick(thread, target_ticks, thread_num) {
