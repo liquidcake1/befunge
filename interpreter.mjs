@@ -235,7 +235,8 @@ export class Interpreter {
 
   get_field(state, col, row, val) {
     if (this.check(state, col, row)) {
-      return this.field[row][col];
+      let val = this.field[row][col];
+      return val === undefined ? 0 : val;
     }
   }
 
@@ -380,7 +381,7 @@ export class Interpreter {
       return 1;
     }
     if (thread.mode == "normal") {
-      let symbol = this.field[thread.row][thread.col];
+      let symbol = this.field[thread.row][thread.col] || 32;
       let instruction = thread.overlays[symbol] || this.instructions[symbol];
       console.log(`Executing ${String.fromCharCode(symbol)} at ${thread.col},${thread.row} stack_length=${thread.stack.length} stack_tail=${thread.stack.slice(-10)}`);
       //console.log("Executing " + String.fromCharCode(symbol));
