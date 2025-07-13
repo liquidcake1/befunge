@@ -206,6 +206,11 @@ export let instructions_raw = {
     desc: "; stop current thread",
     can_jit: false,
   },
+  "]": {
+    impl: function (thread) { thread.interpreter.output_error(thread, "Debug!"); },
+    desc: "; dump thread debug",
+    can_jit: false,
+  },
   " ": {
     impl: function (thread) { },
     desc: "; no-op",
