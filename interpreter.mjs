@@ -158,9 +158,9 @@ export class Interpreter {
       old_wake();
   }
 
-  async sleep_until_unpaused() { // TODO???
+  async sleep_until_unpaused(all_blocked) { // TODO???
     if (!this.paused_event)
-      await this.sleep(this.slice_sleep);
+      await this.sleep(all_blocked ? 50 : this.slice_sleep);
     if (this.paused_event) {
       let paused_event = this.paused_event;
       this.paused_event = null;
@@ -288,6 +288,7 @@ export class Interpreter {
     this.running_promise = new Promise(r => { running_wake = r; });
     let highlighted_cells = [];
     let start_time = new Date().getTime();
+    let all_blocked = false;
     while(this.threads.length > 0) {
       while (this.input_queue.length > 0) {
         let item = this.input_queue.pop();
@@ -320,7 +321,7 @@ export class Interpreter {
         this.output_field();
       }
 
-      let unpause_data = await this.sleep_until_unpaused();
+      let unpause_data = await this.sleep_until_unpaused(all_blocked);
       if (unpause_data) {
         console.log(`Unpaused; resetting ticks to 0 from ${ticks}`);
         ticks = 0;
@@ -337,9 +338,13 @@ export class Interpreter {
       let dead_threads = [];
       while(count < slice_loops && this.threads.length > 0) {
         // This will _not_ iterate over newly-added threads.
+        all_blocked = true;
         let to_iter = limit_threads !== null ? limit_threads : this.threads;
         to_iter = to_iter.filter(thread => !thread.blocked);
-        if (to_iter.length == 0) break;
+        if (to_iter.length == 0) {
+          break;
+        }
+        to_iter.forEach(function (thread) { if (!thread.waiter) { all_blocked = false; } });
         let min_count = Math.min(...to_iter.map(x => x.tick_count));
         to_iter.forEach((thread, i) => {
           if (thread.tick_count == min_count) {
