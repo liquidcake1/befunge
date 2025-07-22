@@ -13,11 +13,6 @@ import { instructions, instructions_raw } from "./instructions.mjs";
 import { Queue } from "./queue.mjs";
 import { Jit } from "./jit.mjs";
 
-import { overlay as S_overlay } from "./overlays/S.mjs";
-import { overlay as SOCK_overlay } from "./overlays/SOCK.mjs";
-import { overlay as WS_overlay } from "./overlays/WS.mjs";
-
-
 function gen_fingerprint(s) {
   let x = 0;
   for(let c of Array.from(s).map(x => x.charCodeAt(0))) {
@@ -25,11 +20,6 @@ function gen_fingerprint(s) {
   }
   return x;
 }
-var overlays = {};
-overlays[gen_fingerprint("S")] = S_overlay;
-overlays[gen_fingerprint("SOCK")] = SOCK_overlay;
-overlays[gen_fingerprint("WS")] = WS_overlay;
-
 
 function deep_copy(obj) {
   return JSON.parse(JSON.stringify(obj));
@@ -100,13 +90,17 @@ export class Interpreter {
   field = [];
   instructions = shallow_copy(instructions);
   instructions_raw = shallow_copy(instructions_raw);
-  overlays = shallowish_copy(overlays, 1);
+  overlays = {};
   input_queue = new Queue(); // Queue things like: change speed, input, etc.
   stdin_queue = new Queue(); // Chars from stdin.
   stdin_waiters = [];
 
   constructor() {
     this.jit = new Jit(this);
+  }
+
+  load_overlay(fingerprint, overlay) {
+    this.overlays[gen_fingerprint(fingerprint)] = overlay;
   }
 
   trigger_event(event_name, ...args) {

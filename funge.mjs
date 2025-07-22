@@ -12,8 +12,18 @@ console.log(field);
 
 import { Interpreter } from "./interpreter.mjs";
 import { load_wasm } from "./wasm.mjs";
+import { overlay as SOCK_overlay } from "./overlays/SOCK.mjs";
+import { overlay as S_overlay } from "./overlays/S.mjs";
+import { overlay as WS_overlay } from "./overlays/WS.mjs";
+
 let interpreter = new Interpreter();
+
+interpreter.load_overlay("S", S_overlay);
+interpreter.load_overlay("SOCK", SOCK_overlay);
+interpreter.load_overlay("WS", WS_overlay);
+
 let instance = await load_wasm(interpreter);
+
 interpreter.field = field;
 interpreter.input_queue.push(["set_speed", -50]);
 interpreter.input_queue.push(["pause"]);
