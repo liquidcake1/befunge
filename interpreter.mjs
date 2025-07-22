@@ -53,17 +53,28 @@ class Thread {
     this.overlays = overlays || {};
   }
 
-  split_thread(old_thread) {
+  split_thread() {
     let thread = new Thread(
-      this.col - this.cold,
-      this.row - this.rowd,
+      this.interpreter,
+      this.col,
+      this.row,
       -this.cold,
       -this.rowd,
       deep_copy(this.stack),
       deep_copy(this.overlays),
     );
-    thread.tick_count = old_thread.tick_count; // Ensure new thread has equal priority to old thread.
+    thread.tick_forwards();
+    thread.tick_count = this.tick_count; // Ensure new thread has equal priority to old thread.
     return thread;
+  }
+
+  tick_forwards() {
+    this.col += this.cold;
+    this.row += this.rowd;
+    if (this.row == this.interpreter.field.length && this.rowd > 0) this.row = 0;
+    else if (this.row == -1 && this.rowd < 0) this.row = this.interpreter.field.length - 1;
+    if (this.col == this.interpreter.field[this.row].length && this.cold > 0) this.col = 0;
+    else if (this.col == -1 && this.cold < 0) this.col = this.interpreter.field[this.row].length - 1;
   }
 
   pop() {
@@ -94,6 +105,7 @@ export class Interpreter {
   input_queue = new Queue(); // Queue things like: change speed, input, etc.
   stdin_queue = new Queue(); // Chars from stdin.
   stdin_waiters = [];
+  handlers = {};
 
   constructor() {
     this.jit = new Jit(this);
@@ -103,8 +115,21 @@ export class Interpreter {
     this.overlays[gen_fingerprint(fingerprint)] = overlay;
   }
 
+  add_handler(event_name, f) {
+    if (this.handlers[event_name] === undefined) {
+      this.handlers[event_name] = [];
+    }
+    this.handlers[event_name].push(f);
+  }
+
   trigger_event(event_name, ...args) {
-    console.log(`Event: ${event_name} -- ${args}`);
+    //console.log(`Event: ${event_name} -- ${args}`);
+    let handlers = this.handlers[event_name];
+    if (handlers === undefined) {
+      //console.log(`Unhandled event: ${event_name} -- ${args}`);
+    } else {
+      handlers.forEach(f => f(...args));
+    }
   }
 
   set_speed(raw_speed) {
@@ -115,7 +140,7 @@ export class Interpreter {
       this.slice_sleep = Math.floor(1.1 ** -raw_speed);
       this.slice_loops = 1;
     }
-    console.log("set_speed: " + this.slice_sleep + " " + this.slice_loops);
+    this.trigger_event("speed_changed", raw_speed, this.slice_sleep, this.slice_loops);
   }
 
   toggle_pause(e) {
@@ -163,7 +188,7 @@ export class Interpreter {
     }
   }
 
-  step(e) { // TODO ???
+  step(e) {
     let old_wake = this.paused_wake;
     this.pause();
     if (old_wake !== null) {
@@ -171,7 +196,7 @@ export class Interpreter {
     }
   }
 
-  step_thread(thread) { // ???
+  step_thread(thread) {
     let old_wake = this.paused_wake;
     this.pause();
     if (old_wake !== null) {
@@ -187,12 +212,15 @@ export class Interpreter {
       await this.running_promise;
       console.log("Last thread has exited");
     }
-    if (this.threads.length > 0) {
-      this.trigger_event("started");
-    }
     let thread = new Thread(this, 0, 0, 1, 0, []);
-    this.threads.push(thread);
+    this.new_thread(thread);
+    this.trigger_event("started");
     this.main_loop();
+  }
+
+  new_thread(thread) {
+    this.threads.push(thread);
+    this.trigger_event("thread_created", thread);
   }
 
   stop() {
@@ -225,6 +253,7 @@ export class Interpreter {
     if (this.instructions_raw[val_str] !== undefined)
       title += ": " + this.instructions_raw[val_str].desc;
     this.jit.cell_changed(row, col);
+    this.trigger_event("cell_changed", col, row, val);
   }
 
   get_field(state, col, row, val) {
@@ -236,17 +265,11 @@ export class Interpreter {
 
   out(s) {
     this.trigger_event("char_out", s);
-    console.log("Out: " + s);
-    process.stdout.write(s);
+    //console.log("Out: " + s);
   }
   oute(s) {
-    this.trigger_event("error_ocurred", s);
+    this.trigger_event("error_occurred", s);
     console.log("Err: " + s);
-  }
-
-
-  outnl() {
-    console.log("Outnl");
   }
 
   error(thread, message) {
@@ -261,18 +284,40 @@ export class Interpreter {
   }
   
   output_field() {
+    let lines = [];
     for(let row=0; row<this.field.length; row++) {
+      let s = "";
       for(let col=0; col<this.field[row].length; col++) {
         let c = this.field[row][col];
-        process.stdout.write(c > 31 && c < 127 ? String.fromCharCode(this.field[row][col]) : "?");
+        s += (c > 31 && c < 127 ? String.fromCharCode(this.field[row][col]) : "?");
       }
-      process.stdout.write("\n");
+      lines.push(s);
     }
+    this.trigger_event("output_field", lines);
   }
 
   async sleep(ms) {
     await new Promise(r => { this.awake_sleep = r; setTimeout(r, ms) });
     this.awake_sleep = null;
+  }
+
+  process_events() {
+    while (this.input_queue.length > 0) {
+      let item = this.input_queue.pop();
+      if (item[0] == "set_speed") {
+        this.set_speed(item[1]);
+      } else if (item[0] == "pause") {
+        this.pause();
+      } else if (item[0] == "unpause") {
+        this.unpause();
+      } else if (item[0] == "stdin") {
+        if (this.stdin_waiters.length > 0) {
+          this.stdin_waiters.shift()(item[1]);
+        } else {
+          this.stdin_queue.push(item[1]);
+        }
+      }
+    }
   }
 
   async main_loop() {
@@ -284,28 +329,13 @@ export class Interpreter {
     let start_time = new Date().getTime();
     let all_blocked = false;
     while(this.threads.length > 0) {
-      while (this.input_queue.length > 0) {
-        let item = this.input_queue.pop();
-        if (item[0] == "set_speed") {
-          this.set_speed(item[1]);
-        } else if (item[0] == "pause") {
-          this.pause();
-        } else if (item[0] == "unpause") {
-          this.unpause();
-        } else if (item[0] == "stdin") {
-          if (this.stdin_waiters.length > 0) {
-            this.stdin_waiters.shift()(item[1]);
-          } else {
-            this.stdin_queue.push(item[1]);
-          }
-        }
-      }
+      this.process_events();
       let slice_loops = this.slice_loops;
       let limit_threads = null;
       let need_sleep = true;
 
       this.threads.forEach(thread => this.trigger_event("thread_state_updated", thread));
-      this.trigger_event("thread_state_synced");
+      this.trigger_event("thread_state_synced", this.threads);
 
       if (ticks > this.max_loops) {
         let end_time = new Date().getTime();
@@ -359,13 +389,12 @@ export class Interpreter {
 
       ticks += count;
     }
-    this.trigger_event("terminate");
     running_wake();
     console.log(`exited main_loop with ticks ${ticks}`);
     let end_time = new Date().getTime();
     console.log(`${ticks} in ${end_time - start_time} is ${ticks / (end_time - start_time) / 1000} MHz`);
     this.output_field();
-    process.exit(0);
+    this.trigger_event("terminate");
   }
 
   tick(thread, target_ticks, thread_num) {
@@ -383,7 +412,7 @@ export class Interpreter {
     if (thread.mode == "normal") {
       let symbol = this.field[thread.row][thread.col] || 32;
       let instruction = thread.overlays[symbol] || this.instructions[symbol];
-      console.log(`Executing ${String.fromCharCode(symbol)} at ${thread.col},${thread.row} stack_length=${thread.stack.length} stack_tail=${thread.stack.slice(-10)}`);
+      //console.log(`Executing ${String.fromCharCode(symbol)} at ${thread.col},${thread.row} stack_length=${thread.stack.length} stack_tail=${thread.stack.slice(-10)}`);
       //console.log("Executing " + String.fromCharCode(symbol));
       let jit_return = this.jit.step_jit(thread, target_ticks);
       if (jit_return > 0) {
@@ -411,12 +440,7 @@ export class Interpreter {
       }
     }
     thread.tick_count += 1;
-    thread.col += thread.cold;
-    thread.row += thread.rowd;
-    if (thread.row == this.field.length && thread.rowd > 0) thread.row = 0;
-    else if (thread.row == -1 && thread.rowd < 0) thread.row = this.field.length - 1;
-    if (thread.col == this.field[thread.row].length && thread.cold > 0) thread.col = 0;
-    else if (thread.col == -1 && thread.cold < 0) thread.col = this.field[thread.row].length - 1;
+    thread.tick_forwards();
     return 1;
   }
 }

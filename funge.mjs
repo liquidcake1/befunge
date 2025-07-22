@@ -28,6 +28,9 @@ interpreter.field = field;
 interpreter.input_queue.push(["set_speed", -50]);
 interpreter.input_queue.push(["pause"]);
 interpreter.input_queue.push(["unpause"]);
+interpreter.add_handler("char_out", function(arg) { process.stdout.write(arg); });
+interpreter.add_handler("output_field", function(lines) { lines.forEach(function(line) {process.stdout.write(line + "\n"); })});
+interpreter.add_handler("terminate", function() { process.exit(0); });
 interpreter.go();
 process.stdin.on('data', function (chunk) {
   chunk.forEach(x => interpreter.input_queue.push(["stdin", x]));

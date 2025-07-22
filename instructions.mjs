@@ -183,7 +183,7 @@ export let instructions_raw = {
           }`},
   },
   "t": {
-    impl: function (thread) { thread.interpreter.threads.push(thread.split_thread()); },
+    impl: function (thread) { thread.interpreter.new_thread(thread.split_thread()); },
     desc: "; create new thread in reverse direction",
     can_jit: false,
   },
@@ -202,7 +202,7 @@ export let instructions_raw = {
     can_jit: false,
   },
   "@": {
-    impl: function (thread) { thread.interpreter.oute("Normal termination!"); thread.running = false; },
+    impl: function (thread) { thread.interpreter.output_error(thread, "Normal termination!"); thread.running = false; },
     desc: "; stop current thread",
     can_jit: false,
   },
