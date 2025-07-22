@@ -1,3 +1,14 @@
+// JIT TODO:
+// * OK, it's probably about 6x faster with JIT than without, but we can go another 4-5x faster by loop unrolling.
+// * We don't bounds-check the stack before executing a JITted routine.
+// * We can probably do a lot better in speed by unrolling and aliasing the stack. Name top N stack vars a1 to aN,
+//   then unpack the top N into those, then run code, then pack aN to a?.
+// * We don't have support for branches, even just the dumb "primary only, bail otherwise" variety.
+// * We don't ever remove JIT. We should destroy JIT when a cell is modified.
+// * If a cell is modified _DURING_ a JITted sequence, what do? If external, we can just claim it doesn't matter.
+//   If the thread self-modified, we'll need a means to abort the JITted sequence early.
+// * There is no JIT visualisation.
+
 function diagonalise_positive(row, col) {
   /*
       0 1 3 6
