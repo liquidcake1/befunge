@@ -141,6 +141,9 @@
 						editing = {"state": false};
 					}
 					e.preventDefault();
+				} else if (e.key.length == 1 && e.target === document.body) {
+					interpreter.input_queue.push(["stdin", e.key.charCodeAt(0)]);
+					e.preventDefault();
 				}
 			}
 			function begin_edit(col, row, td) {
