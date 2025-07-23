@@ -25,7 +25,8 @@ interpreter.load_overlay("WS", WS_overlay);
 let instance = await load_wasm(interpreter);
 
 interpreter.field = field;
-interpreter.input_queue.push(["set_speed", -50]);
+interpreter.input_queue.push(["set_speed", 100]);
+//interpreter.input_queue.push(["set_speed", 90]);
 interpreter.input_queue.push(["pause"]);
 interpreter.input_queue.push(["unpause"]);
 interpreter.add_handler("char_out", function(arg) { process.stdout.write(arg); });
@@ -35,7 +36,7 @@ interpreter.go();
 process.stdin.on('data', function (chunk) {
   chunk.forEach(x => interpreter.input_queue.push(["stdin", x]));
 });
-setTimeout(function () {
+/*setTimeout(function () {
   console.log("sending @");
   interpreter.input_queue.push(["stdin", "@".charCodeAt(0)]);
-}, 2000);
+}, 2000);*/

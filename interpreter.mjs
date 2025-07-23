@@ -88,7 +88,7 @@ class Thread {
 }
 
 export class Interpreter {
-  max_loops = 1000;
+  max_loops = 1000000000000;
   paused_wake = null;
   paused_event = null;
   slice_loops = 1;
