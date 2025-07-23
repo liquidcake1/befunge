@@ -104,6 +104,9 @@
 					end_edit();
 					return;
 				}
+				if (e.ctrlKey || e.altKey) {
+					return;
+				}
 				if (key.length != 1 && !key.startsWith("Arrow")) {
 					console.log(`Key ${key} has weird length; keyCode is ${e.keyCode}`);
 					return;
