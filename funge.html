@@ -114,8 +114,13 @@
 				if (editing.state) {
 					editing.element.classList.remove("editing");
 					if (key.length == 1) {
+						if (e.key == "Backspace") {
+							editing.col -= 1;
+						}
 						set_cell(editing.col, editing.row, key.charCodeAt(0));
-						editing.col += 1;
+						if (e.key != "Backspace") {
+							editing.col += 1;
+						}
 					} else if (key == "ArrowUp") {
 						editing.row -= 1;
 					} else if (key == "ArrowDown") {
