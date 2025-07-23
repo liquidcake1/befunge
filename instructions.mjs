@@ -1,6 +1,6 @@
 export let instructions_raw = {
   "+": {
-    impl: function (thread) { thread.stack.push(-thread.pop() + thread.pop()); },
+    impl: function (thread) { thread.stack.push(thread.pop() + thread.pop()); },
     desc: "b a → b + a",
     can_jit: true,
     stack_min: 2,
