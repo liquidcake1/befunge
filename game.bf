@@ -1,25 +1,25 @@
 #vt >~21pv Input thread                                                         
-H@  ^    <                                                                      
+H I ^    <                                                                      
 T                                                                               
-F                                                                               
-p                                                                               
-Snake state:                      ##########                                    
-                                  #        #                                    
-* full history (x, y) of tail     #        #                                    
-* offset of head/tail             #        #                                    
-* location of food                #  *     #                                    
-* score (it's length)             #  ^<    #                                    
-                                  #  >^    #                                    
-Other stuff:                      #        #                                    
-                                  #        #                                    
-* RNG for food (?)                ##########                                    
-* Clear grid maybe                                                              
-* When placing food, retry if snake                                             
-* Timing?!?!?!?!                                                                
-* Patch interpreter to support graphics                                         
+F V                                                                             
+p e                                                                             
+v<                                ##########                                    
+>75*: 083*p  :183*p  283*p201p  v #        #                                    
+v"*"p-1*8326p-1*8316p-1*8306p200< #        #                                    
+>v  >0v     >10v   >0v            #        #                                    
+ 5v4?2v  v40?00v v2?1>+6+03p+75*v #  *     #                                    
+ 7  >6v     >14v   >3^v30g40p40+< #  ^<    #                                    
+ *> # v  >  #  v > # ^>gg" "-#v_v #  >^    #                                    
+>   ^#>#    ^# >#  ^#   <     <   #        #                                    
+ >6p023p124pv        vpg30g40"+"< #        #                                    
+^           <v-"w"g12<           <##########                                    
+vp32p<       >#v_v>21g"s"- #v_v                                                 
+>"I"v4         >##^ INPUT                                                       
+v   <2v _v#-"d"g12_v#-"a"g12<                                                   
+     ^ 10<  v0-10< >001-v  v01<                                                 
+     ^      <           <  <                                                    
+>21p  >01g83*1-g23g+01g1+83*1-pv                                                
+     ><p*83p10:+1g10+g42g*83g10<                                                
                                                                                 
-                                                                                
-                                                                                
-                                                                                
-                                                                                
-                                                                                
+Rows                                                                            
+Cols                                                                            
