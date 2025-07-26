@@ -146,7 +146,7 @@ class JitFragment {
 export class Jit {
   cell_stats = {};
   path = null;
-  threshold = 1;
+  threshold = 10000000000;
   interpreter = null;
 
   constructor(interpreter) {
