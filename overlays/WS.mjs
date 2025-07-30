@@ -35,13 +35,13 @@ export let overlay = {
   },
   "S": {
     impl: function (thread) {
-      let socket = thread.pop();
-      console.log(socket);
       let n = thread.pop();
-      message = "";
+      let message = "";
       for(let i=0; i<n; i++) {
         message += String.fromCharCode(thread.pop());
       }
+      let socket = thread.pop();
+      console.log(socket);
       console.log(socket.readyState);
       if (socket.readyState == 1) {
         socket.send(message);
@@ -50,7 +50,7 @@ export let overlay = {
         thread.rowd *= -1;
       }
     },
-    desc: "xn ... x1 n SOCKET → (); send message to websocket or reverse if disconnected",
+    desc: "SOCKET xn ... x1 n → (); send message to websocket or reverse if disconnected",
     can_jit: false,
   },
   "R": {

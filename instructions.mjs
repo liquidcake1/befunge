@@ -24,7 +24,7 @@ export let instructions_raw = {
     unchecked_js_code: "stack[stack.length - 2] *= stack.pop();",
   },
   "/": {
-    impl: function (thread) { let a = thread.pop(); let b = thread.pop(); thread.stack.push(Math.floor(b / a)); },
+    impl: function (thread) { let a = thread.pop(); let b = thread.pop(); thread.stack.push(Math.round(b / a)); },
     desc: "b a → b // a",
     can_jit: true,
     stack_min: 2,

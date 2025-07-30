@@ -1,6 +1,6 @@
-#vt >~21pv Input thread                                                         
-H I ^    <                                                                      
-T V ^                                                                           
+#vt >~21pv Input thread                                                        v
+H I ^    <              v"ws://51.68.197.229:6561"$$(@#2"WS"                   <
+T V ^                   >83*1-#@C:#@R#@S><                                      
 F e< >v           <                                                             
 p> #v >" "21g-!#v_^                                                             
 v<              < ^               ##########    $_1+88*%                    v   
@@ -22,4 +22,4 @@ v   <2v _v#-"d"g12_v#-"a"g12<    ^          $<                              4
  v88+1g10\g10+g32g*83g10 p-1*38< ^" "$<LIVE   1EAT                          "   
  >*%:01p83*p 01g83*g01g83*1-gg :" "-!#^_"+"-!#^_$                           ^   
 Rows                                                                            
-Cols
+Cols                                                                            
